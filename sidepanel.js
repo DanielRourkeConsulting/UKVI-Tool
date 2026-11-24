@@ -4,7 +4,7 @@
   'use strict';
   const U = window.UKVI;
   const $ = (s) => document.querySelector(s);
-  let db, tab = null, rows = [], overrides = new Map(), filter = 'all', tid = '', heading = '', msg = '', originPattern = '', timer = null;
+  let selTpl = new Set(['common']), db, tab = null, rows = [], overrides = new Map(), filter = 'all', tid = '', heading = '', msg = '', originPattern = '', timer = null;
 
   const el = (tag, props, ...kids) => {
     const e = document.createElement(tag);
@@ -43,6 +43,7 @@
     const nt = U.templateId(res.href, res.heading);
     if (nt !== tid) overrides.clear();
     tid = nt;
+    if (nt !== lastTid) { selTpl = new Set((db.pageTemplates[tid] || db.prefs.lastTemplates || ['common']).filter((id) => db.caseTemplates[id])); lastTid = nt; }
     const tm = db.tmplMappings[tid] || {};
     const entries = U.entries(db, 'case').concat(U.entries(db, 'adviser'));
     rows = res.fields.map((f) => {
@@ -77,6 +78,15 @@
     sel.append(el('option', { value: '', text: Object.keys(db.cases).length ? '— none selected —' : '— no cases imported —' }));
     Object.entries(db.cases).forEach(([id, c]) => sel.append(el('option', { value: id, text: U.caseLabel(c, id), selected: id === db.currentCase })));
   }
+  let lastTid = '';
+  function renderTpls() {
+    const box = $('#tpl-chips'); box.textContent = '';
+    Object.entries(db.caseTemplates).forEach(([id, t]) => {
+      const cb = el('input', { type: 'checkbox', checked: selTpl.has(id) });
+      cb.addEventListener('change', () => { cb.checked ? selTpl.add(id) : selTpl.delete(id); });
+      box.append(el('label', {}, cb, t.name));
+    });
+  }
   const chipText = { saved: 'saved', edited: 'edited', default: 'default', guess: 'guess – check', none: 'no source' };
 
   function sourceSelect(r) {
@@ -98,6 +108,7 @@
   function render() {
     const list = $('#list'); list.textContent = '';
     const ready = rows.filter((r) => r.include).length;
+    renderTpls();
     $('#summary').textContent = rows.length + ' fields · ' + ready + ' ready';
     if (!rows.length) { list.append(el('div', { class: 'empty', text: 'No fillable fields found on this page.' })); $('#status').textContent = msg; return; }
     const vis = rows.filter((r) => filter === 'all' || (filter === 'ready' ? r.include : (r.origin === 'guess' || r.origin === 'none' || (r.value === '' && r.ref !== 'none'))));
@@ -122,7 +133,7 @@
 
   // ---------- Refresh (tab changed, page loaded, Rescan) ----------
   async function refresh() {
-    db = await U.load(); fillCaseSelect(); $('#chk-template').checked = !!db.prefs.addToTemplate;
+    db = await U.load(); fillCaseSelect();
     tab = await activeTab();
     originPattern = tab && tab.url ? originOf(tab.url) : '';
     if (!originPattern) { showState([el('p', { text: 'Open a UKVI form page in this window.' })]); return; }
@@ -169,11 +180,11 @@
       fields: rows.map((r) => ({ fp: r.fp, label: r.f.display, kind: r.f.kind, part: r.f.part || '', options: r.f.options.slice(0, 40).map((o) => o.text) })) };
     // Case-data items this page needs go into the common case template (adviser data and defaults are ours, not the client's).
     let tplMsg = '';
-    if ($('#chk-template').checked) {
-      const uses = rows.filter((r) => !skipPersist(r) && r.ref.startsWith('case:')).map((r) => ({ key: r.ref.slice(5), fieldLabel: r.f.display }));
-      const added = U.addToTemplate(db, tid, heading || tid, uses);
-      tplMsg = ' ' + uses.length + ' item' + (uses.length === 1 ? '' : 's') + ' in the case template (' + added + ' new).';
-    }
+    const chosen = [...selTpl].filter((id) => db.caseTemplates[id]);
+    db.pageTemplates[tid] = chosen; db.prefs.lastTemplates = chosen;
+    const uses = rows.filter((r) => !skipPersist(r) && r.ref.startsWith('case:')).map((r) => ({ key: r.ref.slice(5), fieldLabel: r.f.display }));
+    chosen.forEach((id) => U.addToTemplate(db, id, tid, heading || tid, uses));
+    tplMsg = chosen.length ? ' ' + uses.length + ' case item' + (uses.length === 1 ? '' : 's') + ' saved to: ' + chosen.map((id) => db.caseTemplates[id].name).join(', ') + '.' : ' No template ticked, so no case items were added to a template.';
     await U.save(db); overrides.clear();
     buildRows(fresh);
     msg = 'Saved this page layout (' + rows.length + ' fields) and ' + learned + ' default value' + (learned === 1 ? '' : 's') + '.' + tplMsg; render();
@@ -181,7 +192,11 @@
 
   $('#btn-fill').addEventListener('click', doFill);
   $('#btn-remember').addEventListener('click', doRemember);
-  $('#chk-template').addEventListener('change', async (e) => { db = await U.load(); db.prefs.addToTemplate = e.target.checked; await U.save(db); });
+  $('#btn-tpl-new').addEventListener('click', async () => {
+    const inp = $('#tpl-new-name'); db = await U.load();
+    const id = U.newTemplate(db, inp.value); if (!id) return;
+    await U.save(db); selTpl.add(id); inp.value = ''; renderTpls();
+  });
   $('#btn-rescan').addEventListener('click', refresh);
   $('#btn-opts').addEventListener('click', () => chrome.runtime.openOptionsPage());
   $('#filter').addEventListener('change', (e) => { filter = e.target.value; render(); });

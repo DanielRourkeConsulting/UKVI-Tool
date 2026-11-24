@@ -152,7 +152,7 @@
   function renderLearned() {
     listWith('#tmpl-list', Object.entries(db.templates).sort((a, b) => b[1].updated - a[1].updated).map(([id, t]) => ({
       content: [el('b', { text: t.title || id }), ' ', el('span', { class: 'pill', text: t.fields.length + ' fields' }), ' ', el('small', { text: t.url + ' · ' + new Date(t.updated).toLocaleDateString('en-GB') })],
-      remove: async () => { delete db.templates[id]; delete db.tmplMappings[id]; U.removeFormFromTemplate(db, id); await persist(); renderLearned(); }
+      remove: async () => { delete db.templates[id]; delete db.tmplMappings[id]; U.removeFormFromTemplates(db, id); await persist(); renderLearned(); }
     })), 'No forms remembered yet. Open a form, click the extension icon, then "Remember this page".');
     listWith('#map-list', Object.entries(db.mappings).sort().map(([fp, ref]) => ({
       content: [fp, ' → ', el('span', { class: 'pill', text: U.refLabel(ref, db) })],
@@ -168,23 +168,45 @@
     })), 'None yet.');
   }
 
-  // ---------- Case template ----------
+  // ---------- Case templates ----------
+  let tplSel = 'common';
   function renderTemplate() {
-    const items = Object.entries(db.caseTemplate.items).sort((a, b) => a[1].label.localeCompare(b[1].label));
+    const sel = $('#tpl-select'); sel.textContent = '';
+    if (!db.caseTemplates[tplSel]) tplSel = 'common';
+    Object.entries(db.caseTemplates).forEach(([id, t]) => sel.append(el('option', { value: id, selected: id === tplSel, text: t.name + ' (' + Object.keys(t.items).length + ' items)' })));
+    $('#btn-tpl-delete').disabled = !!db.caseTemplates[tplSel].builtin;
+    const t = db.caseTemplates[tplSel];
+    const common = db.caseTemplates.common.items;
+    const items = Object.entries(t.items).sort((a, b) => a[1].label.localeCompare(b[1].label));
     listWith('#tpl-list', items.map(([key, it]) => {
       const forms = Object.entries(it.forms);
       return {
         content: [el('b', { text: it.label }), ' ', el('small', { text: key }), ' ',
-          forms.length ? forms.map(([tid, f]) => el('span', { class: 'pill', title: f.fields.join(', '), text: f.title })) : el('span', { class: 'pill', text: 'added by hand' })],
-        remove: async () => { delete db.caseTemplate.items[key]; await persist(); renderTemplate(); }
+          tplSel !== 'common' && common[key] ? el('span', { class: 'pill', text: 'also in Common' }) : null, ' ',
+          forms.length ? forms.map(([pid, f]) => el('span', { class: 'pill', title: f.fields.join(', '), text: f.title })) : el('span', { class: 'pill', text: 'added by hand' })],
+        remove: async () => { delete t.items[key]; await persist(); renderTemplate(); }
       };
-    }), 'Nothing yet. Open a form in the side panel, link its fields to case data, and click "Remember this page".');
+    }), 'Nothing in this template yet. Open a form in the side panel, link its fields to case data, tick this template and click "Remember this page".');
   }
+  $('#tpl-select').addEventListener('change', (e) => { tplSel = e.target.value; renderTemplate(); });
+  $('#btn-tpl-create').addEventListener('click', async () => {
+    const id = U.newTemplate(db, $('#tpl-new-name').value); if (!id) return;
+    tplSel = id; $('#tpl-new-name').value = ''; await persist(); renderTemplate();
+  });
+  $('#btn-tpl-rename').addEventListener('click', async () => {
+    const name = prompt('New name for this template:', db.caseTemplates[tplSel].name); if (!name || !name.trim()) return;
+    db.caseTemplates[tplSel].name = name.trim(); await persist(); renderTemplate();
+  });
+  $('#btn-tpl-delete').addEventListener('click', async () => {
+    if (db.caseTemplates[tplSel].builtin || !confirm('Delete this template? (Remembered form layouts are not affected.)')) return;
+    delete db.caseTemplates[tplSel]; Object.keys(db.pageTemplates).forEach((p) => { db.pageTemplates[p] = db.pageTemplates[p].filter((x) => x !== tplSel); });
+    db.prefs.lastTemplates = (db.prefs.lastTemplates || []).filter((x) => x !== tplSel); tplSel = 'common'; await persist(); renderTemplate();
+  });
   $('#btn-tpl-add').addEventListener('click', async () => {
     const key = U.slug($('#tpl-key').value); if (!key) return;
-    const e = U.entries(db, 'case').find((x) => x.key === key);
-    db.caseTemplate.items[key] = db.caseTemplate.items[key] || { label: e ? e.label : U.humanise(key), forms: {}, manual: true };
-    db.caseTemplate.items[key].manual = true;
+    const e = U.entries(db, 'case').find((x) => x.key === key), t = db.caseTemplates[tplSel];
+    t.items[key] = t.items[key] || { label: e ? e.label : U.humanise(key), forms: {} };
+    t.items[key].manual = true;
     $('#tpl-key').value = ''; await persist(); renderTemplate();
   });
 
@@ -196,7 +218,7 @@
       const j = JSON.parse(await f.text());
       if (!j.ukviHelperBackup || !j.db) throw new Error('This is not a UKVI Form Helper backup.');
       if (!confirm('Replace everything currently saved with this backup?')) return;
-      db = Object.assign(U.defaultDb(), j.db); await persist(); refreshAll(); say('#backup-msg', 'Restored.', 'ok');
+      db = U.ensureTemplates(Object.assign(U.defaultDb(), j.db)); await persist(); refreshAll(); say('#backup-msg', 'Restored.', 'ok');
     } catch (e) { say('#backup-msg', e.message, 'err'); }
   });
   $('#btn-wipe-cases').addEventListener('click', async () => { if (!confirm('Delete all saved case data?')) return; db.cases = {}; db.currentCase = null; await persist(); refreshAll(); say('#backup-msg', 'Case data deleted.', 'ok'); });

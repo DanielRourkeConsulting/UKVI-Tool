@@ -65,13 +65,17 @@ t('defaults counting', () => {
 t('template id ignores long ids', () => {
   assert.strictEqual(U.templateId('https://x.gov.uk/apply/12345678/step?x=1', 'Your Name!'), 'x.gov.uk/apply/*/step#your name');
 });
-t('case template accumulates items across forms', () => {
+t('case templates: common + named, multi-select, migration', () => {
   const db = U.defaultDb();
-  assert.strictEqual(U.addToTemplate(db, 'f1', 'Form one', [{ key: 'dob', fieldLabel: 'Date of birth day' }, { key: 'dob', fieldLabel: 'Date of birth month' }, { key: 'nino', fieldLabel: 'NI' }]), 2);
-  assert.strictEqual(U.addToTemplate(db, 'f2', 'Form two', [{ key: 'dob', fieldLabel: 'Birth date' }]), 0);
-  assert.deepStrictEqual(Object.keys(db.caseTemplate.items.dob.forms), ['f1', 'f2']);
-  assert.strictEqual(db.caseTemplate.items.dob.label, 'Date of birth');
-  U.removeFormFromTemplate(db, 'f1');
-  assert.ok(!db.caseTemplate.items.nino && db.caseTemplate.items.dob);
+  assert.ok(db.caseTemplates.common.builtin);
+  const id = U.newTemplate(db, 'Fee waiver'); assert.strictEqual(id, 'fee_waiver'); assert.strictEqual(U.newTemplate(db, 'Fee waiver'), 'fee_waiver_2');
+  assert.strictEqual(U.addToTemplate(db, 'common', 'f1', 'Form one', [{ key: 'dob', fieldLabel: 'Date of birth day' }, { key: 'dob', fieldLabel: 'Date of birth month' }, { key: 'nino', fieldLabel: 'NI' }]), 2);
+  assert.strictEqual(U.addToTemplate(db, id, 'f1', 'Form one', [{ key: 'dob', fieldLabel: 'Date of birth day' }]), 1);
+  assert.strictEqual(U.addToTemplate(db, 'common', 'f2', 'Form two', [{ key: 'dob', fieldLabel: 'Birth date' }]), 0);
+  assert.deepStrictEqual(Object.keys(db.caseTemplates.common.items.dob.forms), ['f1', 'f2']);
+  U.removeFormFromTemplates(db, 'f1');
+  assert.ok(!db.caseTemplates.common.items.nino && db.caseTemplates.common.items.dob && !db.caseTemplates[id].items.dob);
+  const old = Object.assign(U.defaultDb(), { caseTemplate: { items: { x: { label: 'X', forms: {} } } } }); delete old.caseTemplates;
+  U.ensureTemplates(old); assert.ok(old.caseTemplates.common.items.x && !old.caseTemplate);
 });
 console.log(n + ' tests passed');

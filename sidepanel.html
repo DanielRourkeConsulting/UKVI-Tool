@@ -15,7 +15,7 @@
   <button id="btn-fill" class="p">Fill ticked fields</button>
   <button id="btn-remember" class="s" title="Save the layout, your field choices and the values currently typed on the page as defaults">Remember this page</button>
   <button id="btn-rescan" class="s">Rescan</button>
-  <label class="tpl"><input type="checkbox" id="chk-template" checked> Add to case template</label>
+  <div class="tpls"><b>Save its case items to:</b><div id="tpl-chips"></div><div class="tpl-new"><input type="text" id="tpl-new-name" placeholder="New template name" aria-label="New template name"><button id="btn-tpl-new" class="s">Add</button></div></div>
   <div id="status" class="status"></div>
 </footer>
 <script src="lib.js"></script>

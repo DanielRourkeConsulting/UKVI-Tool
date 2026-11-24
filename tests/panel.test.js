@@ -42,10 +42,16 @@ const src = path.join(__dirname, '..');
   const s2 = await st();
   assert.strictEqual(s2.defaults['reason for applying'][0].v, 'Fee waiver – destitution');
   assert.strictEqual(Object.keys(s2.templates).length, 1);
-  const tpl = s2.caseTemplate.items; assert.ok(tpl.given_names && tpl.dob && tpl.passport_number, 'case items added to the case template');
+  const tpl = s2.caseTemplates.common.items; assert.ok(tpl.given_names && tpl.dob && tpl.passport_number, 'case items added to the case template');
   assert.ok(!tpl.oisc_number && !tpl.adviser_email, 'adviser data is not part of the client template');
   assert.strictEqual(Object.keys(tpl.given_names.forms).length, 1);
   assert.ok(!JSON.stringify(s2.defaults).includes('Alex'), 'case data never stored as a default');
+  // Create a second template in the panel, tick both, remember again: items land in both.
+  await panel.fill('#tpl-new-name', 'Fee waiver'); await panel.click('#btn-tpl-new'); await panel.waitForTimeout(300);
+  await panel.evaluate(() => document.getElementById('btn-remember').click()); await panel.waitForTimeout(600);
+  const s3 = await st();
+  assert.ok(s3.caseTemplates.fee_waiver.items.given_names && s3.caseTemplates.common.items.given_names, 'saved to both selected templates');
+  assert.deepStrictEqual(Object.values(s3.pageTemplates)[0], ['common', 'fee_waiver'], 'page remembers its templates');
   // "Next page / next client": reload the form, panel follows by itself (no click on the icon).
   await form.reload(); await panel.waitForTimeout(1200);
   rows = await rowsOf();

@@ -41,8 +41,10 @@
   </section>
 
   <section id="tab-template" hidden>
-    <h2>Case template</h2>
-    <p>Everything a client needs to provide, built from the forms you've remembered. Each item shows the forms that ask for it.</p>
+    <h2>Case templates</h2>
+    <p><b>Common to all forms</b> holds the client information every form needs; update it here whenever something changes. Create other templates for commonly used forms. When you remember a page in the side panel you choose which templates its items go into (one or several).</p>
+    <div class="row"><select id="tpl-select"></select><button id="btn-tpl-rename">Rename</button><button id="btn-tpl-delete" class="danger">Delete template</button></div>
+    <div class="row"><input type="text" id="tpl-new-name" placeholder="New template name"><button id="btn-tpl-create">Create template</button></div>
     <div id="tpl-list"></div>
     <h3>Add an item by hand</h3>
     <div class="row"><input type="text" id="tpl-key" list="keys-case" placeholder="item name, e.g. passport_number"><button id="btn-tpl-add">Add</button></div>

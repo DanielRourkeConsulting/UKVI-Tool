@@ -260,8 +260,8 @@
   };
 
   // ---- Stored data ----
-  U.defaultDb = () => ({ version: 1, caseTemplate: { items: {} }, prefs: { addToTemplate: true }, adviser: {}, cases: {}, currentCase: null, mappings: {}, tmplMappings: {}, defaults: {}, templates: {}, importMaps: {} });
-  U.load = async () => { const r = await chrome.storage.local.get('db'); const db = Object.assign(U.defaultDb(), (r && r.db) || {}); if (!db.caseTemplate || !db.caseTemplate.items) db.caseTemplate = { items: {} }; db.prefs = Object.assign({ addToTemplate: true }, db.prefs); return db; };
+  U.defaultDb = () => ({ version: 1, caseTemplates: { common: { name: 'Common to all forms', builtin: true, items: {} } }, pageTemplates: {}, prefs: { lastTemplates: ['common'] }, adviser: {}, cases: {}, currentCase: null, mappings: {}, tmplMappings: {}, defaults: {}, templates: {}, importMaps: {} });
+  U.load = async () => { const r = await chrome.storage.local.get('db'); return U.ensureTemplates(Object.assign(U.defaultDb(), (r && r.db) || {})); };
   U.save = async (db) => { await chrome.storage.local.set({ db }); };
 
   // Turn a mapping reference ('case:dob' | 'adviser:oisc_number' | 'default' | 'none') into a value.
@@ -289,19 +289,44 @@
     if (list.length > 6) list.length = 6;
   };
 
-  // ---- Case template: the common list of client information needed across all remembered forms ----
-  // items[key] = { label, forms: { [templateId]: { title, fields: [form field labels] } } }
-  U.addToTemplate = (db, tid, title, uses) => {
-    const items = db.caseTemplate.items; let added = 0;
+  // ---- Case templates: named lists of the client information a set of forms needs ----
+  // db.caseTemplates[id] = { name, builtin?, items: { [key]: { label, forms: { [pageId]: { title, fields: [] } }, manual? } } }
+  // "common" is the built-in one for values shared by all forms.
+  U.ensureTemplates = (db) => {
+    db.caseTemplates = db.caseTemplates || {};
+    if (!db.caseTemplates.common) db.caseTemplates = Object.assign({ common: { name: 'Common to all forms', builtin: true, items: {} } }, db.caseTemplates);
+    db.caseTemplates.common.builtin = true;
+    if (db.caseTemplate && db.caseTemplate.items) { // v0.3 single template -> common
+      Object.entries(db.caseTemplate.items).forEach(([k, it]) => { if (!db.caseTemplates.common.items[k]) db.caseTemplates.common.items[k] = it; });
+    }
+    delete db.caseTemplate;
+    Object.values(db.caseTemplates).forEach((t) => { t.items = t.items || {}; });
+    db.pageTemplates = db.pageTemplates || {};
+    db.prefs = Object.assign({ lastTemplates: ['common'] }, db.prefs);
+    return db;
+  };
+  U.newTemplate = (db, name) => {
+    name = String(name || '').trim(); if (!name) return null;
+    let id = U.slug(name) || 'template', n = 2, base = id;
+    while (db.caseTemplates[id]) id = base + '_' + n++;
+    db.caseTemplates[id] = { name, items: {} };
+    return id;
+  };
+  U.addToTemplate = (db, templateId, pageId, title, uses) => {
+    const t = db.caseTemplates[templateId]; if (!t) return 0;
+    let added = 0;
     uses.forEach(({ key, fieldLabel }) => {
-      if (!items[key]) { const e = U.entries(db, 'case').find((x) => x.key === key); items[key] = { label: e ? e.label : U.humanise(key), forms: {} }; added++; }
-      const f = (items[key].forms[tid] = items[key].forms[tid] || { title, fields: [] });
+      if (!t.items[key]) { const e = U.entries(db, 'case').find((x) => x.key === key); t.items[key] = { label: e ? e.label : U.humanise(key), forms: {} }; added++; }
+      const f = (t.items[key].forms[pageId] = t.items[key].forms[pageId] || { title, fields: [] });
       f.title = title; if (!f.fields.includes(fieldLabel)) f.fields.push(fieldLabel);
     });
     return added;
   };
-  U.removeFormFromTemplate = (db, tid) => {
-    Object.entries(db.caseTemplate.items).forEach(([k, it]) => { delete it.forms[tid]; if (!Object.keys(it.forms).length && !it.manual) delete db.caseTemplate.items[k]; });
+  U.removeFormFromTemplates = (db, pageId) => {
+    Object.values(db.caseTemplates).forEach((t) => Object.entries(t.items).forEach(([k, it]) => {
+      delete it.forms[pageId]; if (!Object.keys(it.forms).length && !it.manual) delete t.items[k];
+    }));
+    delete db.pageTemplates[pageId];
   };
 
   // Identify a form page: host + path (long ids replaced) + main heading.

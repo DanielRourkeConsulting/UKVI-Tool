@@ -31,3 +31,4 @@ button.s{background:#fff;color:#1d70b8;border:1px solid #1d70b8;border-radius:3p
 .empty button{margin-top:12px}
 .empty code{background:#f3f2f1;padding:1px 4px;border-radius:3px}
 .tpl{flex-basis:100%;color:#1d1d1b}
+.tpls{flex-basis:100%;border-top:1px solid #eee;padding-top:6px}.tpls b{display:block;margin-bottom:4px}#tpl-chips{display:flex;flex-wrap:wrap;gap:4px 10px}#tpl-chips label{display:flex;gap:4px;align-items:center}.tpl-new{display:flex;gap:6px;margin-top:6px}.tpl-new input{flex:1;min-width:0;padding:3px 5px;border:1px solid #999;border-radius:3px}
