@@ -1,0 +1,21 @@
+{
+  "manifest_version": 3,
+  "name": "UKVI Form Helper",
+  "version": "0.1.0",
+  "description": "Learns the layout of UKVI online forms and suggests defaults from your own saved data. Everything stays in this browser.",
+  "minimum_chrome_version": "102",
+  "permissions": ["storage", "activeTab", "scripting"],
+  "background": { "service_worker": "background.js" },
+  "action": { "default_title": "UKVI Form Helper (Alt+Shift+U)" },
+  "options_page": "options.html",
+  "commands": {
+    "_execute_action": {
+      "suggested_key": { "default": "Alt+Shift+U" },
+      "description": "Open or close the helper panel on this page"
+    }
+  },
+  "content_security_policy": {
+    "extension_pages": "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none'; form-action 'none'; base-uri 'none'; frame-ancestors 'none'"
+  },
+  "icons": { "16": "icons/16.png", "48": "icons/48.png", "128": "icons/128.png" }
+}

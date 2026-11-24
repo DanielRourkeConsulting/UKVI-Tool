@@ -1,0 +1,20 @@
+<!doctype html><html><head><title>Test form</title></head><body>
+<h1>Applicant details</h1>
+<form>
+<div><label for="gn">First name</label><input id="gn" name="gn"></div>
+<div><label for="fn">Family name <span>(optional)</span></label><input id="fn" name="fn"></div>
+<fieldset><legend>Date of birth</legend>
+ <label for="d">Day</label><input id="d" name="d" maxlength="2">
+ <label for="m">Month</label><input id="m" name="m" maxlength="2">
+ <label for="y">Year</label><input id="y" name="y" maxlength="4"></fieldset>
+<div><label for="nat">Nationality</label><select id="nat"><option value="">Choose</option><option>Examplestan</option><option>Otherland</option></select></div>
+<fieldset><legend>Do you have a passport?</legend>
+ <input type="radio" name="pp" id="pp1" value="y"><label for="pp1">Yes</label>
+ <input type="radio" name="pp" id="pp2" value="n"><label for="pp2">No</label></fieldset>
+<div><label for="ppn">Passport number</label><input id="ppn"></div>
+<fieldset><legend>Your representative</legend><label for="oisc">OISC registration number</label><input id="oisc"><label for="re">Email address</label><input id="re"></fieldset>
+<div><label for="reason">Reason for applying</label><textarea id="reason"></textarea></div>
+<div><label><input type="checkbox" id="decl"> I declare this is true</label></div>
+<input type="password" id="pw"><input type="hidden" id="hid">
+<button type="button" id="submit">Continue</button>
+</form></body></html>

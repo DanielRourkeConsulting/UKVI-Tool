@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>UKVI Form Helper – data</title>
+<link rel="stylesheet" href="options.css">
+</head>
+<body>
+<header class="top">
+  <h1>UKVI Form Helper</h1>
+  <p class="priv">🔒 Everything here is stored only in this browser. Nothing is sent anywhere.</p>
+</header>
+<nav id="tabs" role="tablist">
+  <button data-tab="cases" class="on">Case data</button>
+  <button data-tab="adviser">Adviser (every form)</button>
+  <button data-tab="learned">Learned forms &amp; defaults</button>
+  <button data-tab="backup">Backup &amp; Copilot help</button>
+</nav>
+<main>
+  <section id="tab-cases">
+    <h2>Import case data</h2>
+    <p>Choose a CSV or JSON file exported from your case management system, or paste it below. You'll see how each column will be named before anything is saved, and the tool remembers your choices for next time.</p>
+    <div class="row">
+      <input type="file" id="file" accept=".csv,.json,.txt,text/csv,application/json">
+      <button id="btn-read" class="primary">Read it</button>
+    </div>
+    <textarea id="paste" rows="5" placeholder="…or paste CSV / JSON here" spellcheck="false"></textarea>
+    <div id="import-msg" class="msg"></div>
+    <div id="preview" hidden>
+      <h3 id="preview-title"></h3>
+      <table id="map-table"><thead><tr><th>Column in your file</th><th>Example</th><th>Becomes this item</th><th></th></tr></thead><tbody></tbody></table>
+      <label class="chk"><input type="checkbox" id="replace"> Replace all saved cases (otherwise cases with the same ID are updated and others are kept)</label>
+      <div class="row"><button id="btn-import" class="primary">Import</button><button id="btn-cancel">Cancel</button></div>
+    </div>
+
+    <h2>Saved cases</h2>
+    <div class="row"><select id="case-select"></select><button id="btn-use">Use for filling</button><button id="btn-del-case" class="danger">Delete case</button></div>
+    <div id="case-editor"></div>
+  </section>
+
+  <section id="tab-adviser" hidden>
+    <h2>Adviser details (used on every form)</h2>
+    <p>These are the same for every client. They are offered on any field you link to them.</p>
+    <div id="adviser-editor"></div>
+  </section>
+
+  <section id="tab-learned" hidden>
+    <h2>Form layouts seen</h2><div id="tmpl-list"></div>
+    <h2>Field links</h2><p>Which saved item feeds which form field. Remove one to let the tool guess again.</p><div id="map-list"></div>
+    <h2>Default values</h2><p>Remembered answers for fields that don't come from case data (most used first).</p><div id="def-list"></div>
+    <h2>Import column names</h2><div id="imp-list"></div>
+  </section>
+
+  <section id="tab-backup" hidden>
+    <h2>Backup</h2>
+    <div class="row">
+      <button id="btn-export">Download backup (.json)</button>
+      <input type="file" id="restore-file" accept=".json,application/json">
+      <button id="btn-restore">Restore from backup</button>
+    </div>
+    <p>A backup contains client data. Keep it where you would keep any client file.</p>
+    <h2>Clear</h2>
+    <div class="row"><button id="btn-wipe-cases" class="danger">Delete all case data</button><button id="btn-wipe-all" class="danger">Delete everything</button></div>
+    <div id="backup-msg" class="msg"></div>
+
+    <h2>Using Copilot to reshape an export</h2>
+    <p>Use the Copilot your employer has approved. <b>Option A</b> hands Copilot the export and gets back a file this tool can read. <b>Option B</b> gives Copilot only the column headings (no client data) and gets back a column-name mapping, which this tool accepts as an import.</p>
+    <h3>Option A – reshape the whole export</h3>
+    <textarea id="prompt-a" rows="14" readonly></textarea>
+    <div class="row"><button data-copy="prompt-a">Copy prompt A</button><button id="btn-sample-json">Download sample .json</button><button id="btn-sample-csv">Download sample .csv</button></div>
+    <h3>Option B – headings only</h3>
+    <textarea id="prompt-b" rows="9" readonly></textarea>
+    <div class="row"><button data-copy="prompt-b">Copy prompt B</button></div>
+  </section>
+</main>
+<datalist id="keys-case"></datalist>
+<datalist id="keys-adviser"></datalist>
+<script src="lib.js"></script>
+<script src="options.js"></script>
+</body>
+</html>
