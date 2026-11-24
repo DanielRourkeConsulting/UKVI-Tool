@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>UKVI Form Helper</title>
+<link rel="stylesheet" href="sidepanel.css">
+</head>
+<body>
+<header><b>UKVI Form Helper</b><button id="btn-opts" title="Data settings">⚙</button></header>
+<div class="bar"><span>Case:</span><select id="case-sel"></select></div>
+<div class="sum"><span id="summary"></span><select id="filter"><option value="all">Show all</option><option value="ready">Ready to fill</option><option value="attention">Needs attention</option></select></div>
+<div id="list" class="list"></div>
+<footer>
+  <button id="btn-fill" class="p">Fill ticked fields</button>
+  <button id="btn-remember" class="s" title="Save the layout, your field choices and the values currently typed on the page as defaults">Remember this page</button>
+  <button id="btn-rescan" class="s">Rescan</button>
+  <div id="status" class="status"></div>
+</footer>
+<script src="lib.js"></script>
+<script src="sidepanel.js"></script>
+</body>
+</html>

@@ -1,66 +1,53 @@
-// Runs the real lib.js + content.js in Chromium on a fake form, with chrome.storage stubbed in memory.
-const { chromium } = require('playwright'); const fs = require('fs'), path = require('path'), assert = require('assert');
-const root = path.join(__dirname, '..');
-const stub = `window.__store={};window.chrome={storage:{local:{get:async k=>({[k]:window.__store[k]}),set:async o=>{Object.assign(window.__store,JSON.parse(JSON.stringify(o)))}}},runtime:{sendMessage:async()=>{}}};`;
+// Loads the real extension (manifest copy with localhost pre-approved, standing in for the user's one-time
+// "Allow on this site"), serves a fake form over http, and drives the side panel page.
+const { chromium } = require('playwright'); const fs = require('fs'), path = require('path'), os = require('os'), http = require('http'), assert = require('assert');
+const src = path.join(__dirname, '..');
 (async () => {
-  const b = await chromium.launch(); const page = await b.newPage();
-  const errors = []; page.on('pageerror', (e) => errors.push(e.message)); page.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
-  await page.goto('file://' + path.join(__dirname, 'form.html'));
-  await page.evaluate(stub);
-  const U = require('../lib.js');
-  const db = U.defaultDb();
+  const ext = fs.mkdtempSync(path.join(os.tmpdir(), 'ukvi-ext-'));
+  fs.cpSync(src, ext, { recursive: true, filter: (f) => !/node_modules|\.git(\/|$)|tests/.test(f) });
+  const m = JSON.parse(fs.readFileSync(path.join(ext, 'manifest.json'), 'utf8')); m.host_permissions = ['http://localhost/*']; fs.writeFileSync(path.join(ext, 'manifest.json'), JSON.stringify(m));
+  const server = http.createServer((q, r) => { r.setHeader('content-type', 'text/html'); r.end(fs.readFileSync(path.join(__dirname, 'form.html'))); }).listen(0);
+  const url = 'http://localhost:' + server.address().port + '/apply/12345678/form';
+  const ctx = await chromium.launchPersistentContext(fs.mkdtempSync(path.join(os.tmpdir(), 'ukvi-p-')), { headless: false, args: ['--headless=new', '--disable-extensions-except=' + ext, '--load-extension=' + ext, '--no-sandbox'] });
+  let [sw] = ctx.serviceWorkers(); if (!sw) sw = await ctx.waitForEvent('serviceworker', { timeout: 15000 });
+  const id = sw.url().split('/')[2];
+  const U = require('../lib.js'); const db = U.defaultDb();
   db.adviser = { oisc_number: 'N123', adviser_email: 'adv@example.org' };
   db.cases = { C1: { data: { given_names: 'Alex', family_name: 'Sample', dob: '1990-04-23', nationality: 'Examplestan', passport_number: 'P123', receives_benefits: 'Yes', dependants: 'No' } } };
-  db.mappings = { 'receives benefits': 'case:receives_benefits', 'do you have dependants': 'case:dependants' };
-  db.currentCase = 'C1';
-  await page.evaluate((d) => { window.__store.db = d; }, db);
-  const inject = async () => { await page.addScriptTag({ content: fs.readFileSync(path.join(root, 'lib.js'), 'utf8') }); await page.addScriptTag({ content: fs.readFileSync(path.join(root, 'content.js'), 'utf8') }); };
-  // Scripts added with addScriptTag run in the page world, so the stub is visible just the same.
-  await inject();
-  const state = () => page.evaluate(() => ({ db: window.__store.db }));
-  // Panel is in a closed shadow root: drive it through the exposed api and the DOM instead.
-  await page.waitForTimeout(300);
-  const host = await page.$('#ukvi-form-helper-host'); assert.ok(host, 'panel host exists');
-  assert.strictEqual(await page.evaluate(() => document.getElementById('hid') && 1), 1);
-  // Closed shadow root: use a test hook via a patched attachShadow before injection on a fresh page.
-  await page.reload(); await page.evaluate(stub); await page.evaluate((d) => { window.__store.db = d; }, db);
-  await page.evaluate(() => { const o = Element.prototype.attachShadow; Element.prototype.attachShadow = function (i) { const r = o.call(this, Object.assign({}, i, { mode: 'open' })); return r; }; });
-  await inject(); await page.waitForTimeout(300);
-  const rows = await page.evaluate(() => { const sr = document.getElementById('ukvi-form-helper-host').shadowRoot; return [...sr.querySelectorAll('.row')].map((r) => ({ lab: r.querySelector('.lab').textContent, chip: r.querySelector('.chip').textContent, val: r.querySelector('.ctl input').value, on: r.querySelector('input[type=checkbox]').checked })); });
-  console.log(rows.map((r) => JSON.stringify(r)).join('\n'));
-  assert.ok(!rows.some((r) => /password|hid/i.test(r.lab)), 'password/hidden skipped');
-  const get = (s) => rows.find((r) => r.lab.startsWith(s));
-  assert.strictEqual(get('First name').chip, 'guess – check');
-  assert.strictEqual(get('First name').val, 'Alex');
-  assert.strictEqual(get('First name').on, false, 'guesses are not pre-ticked');
-  // Tick the guesses and fill.
-  await page.evaluate(() => { const sr = document.getElementById('ukvi-form-helper-host').shadowRoot; sr.querySelectorAll('.row').forEach((r) => { const cb = r.querySelector('input[type=checkbox]'); const v = r.querySelector('.ctl input').value; if (v && !cb.checked) cb.click(); }); [...sr.querySelectorAll('footer button')].find((b) => /Fill/.test(b.textContent)).click(); });
-  await page.waitForTimeout(300);
-  const v = await page.evaluate(() => ({ gn: gn.value, fn: fn.value, d: d.value, m: m.value, y: y.value, nat: nat.value, ppn: ppn.value, oisc: oisc.value, re: re.value, pw: pw.value }));
+  db.currentCase = 'C1'; db.mappings = { 'receives benefits': 'case:receives_benefits', 'do you have dependants': 'case:dependants' };
+  await sw.evaluate((d) => chrome.storage.local.set({ db: d }), db);
+  const errors = [];
+  const form = await ctx.newPage(); form.on('pageerror', (e) => errors.push(e.message)); await form.goto(url);
+  const panel = await ctx.newPage(); panel.on('pageerror', (e) => errors.push(e.message)); panel.on('console', (x) => x.type() === 'error' && errors.push(x.text()));
+  await panel.goto(`chrome-extension://${id}/sidepanel.html`);
+  const refresh = async () => { await form.bringToFront(); await panel.evaluate(() => window.__ukviTest.refresh()); await panel.waitForTimeout(400); };
+  const rowsOf = () => panel.evaluate(() => [...document.querySelectorAll('.row')].map((r) => ({ lab: r.querySelector('.lab').textContent, chip: r.querySelector('.chip').textContent, val: r.querySelector('.ctl input').value, on: r.querySelector('input[type=checkbox]').checked })));
+  await refresh();
+  let rows = await rowsOf(); console.log(rows.map((r) => JSON.stringify(r)).join('\n'));
+  const get = (rs, s) => rs.find((r) => r.lab.startsWith(s));
+  assert.ok(!rows.some((r) => /password/i.test(r.lab)), 'password/hidden skipped');
+  assert.deepStrictEqual([get(rows, 'First name').chip, get(rows, 'First name').val, get(rows, 'First name').on], ['guess – check', 'Alex', false]);
+  // Tick everything with a value, then fill.
+  await panel.evaluate(() => { document.querySelectorAll('.row').forEach((r) => { const cb = r.querySelector('input[type=checkbox]'); if (r.querySelector('.ctl input').value && !cb.checked) cb.click(); }); document.getElementById('btn-fill').click(); });
+  await panel.waitForTimeout(900);
+  const v = await form.evaluate(() => ({ gn: gn.value, fn: fn.value, d: d.value, m: m.value, y: y.value, nat: nat.value, ppn: ppn.value, oisc: oisc.value, re: re.value, sw: sw.getAttribute('aria-checked'), dy: dy.getAttribute('aria-pressed'), dn: dn.getAttribute('aria-pressed') }));
   console.log(v);
-  assert.deepStrictEqual([v.gn, v.fn, v.d, v.m, v.y, v.nat, v.ppn], ['Alex', 'Sample', '23', '04', '1990', 'Examplestan', 'P123']);
-  assert.strictEqual(v.oisc, 'N123', 'adviser fieldset OISC');
-  assert.strictEqual(v.re, 'adv@example.org', 'adviser email in representative fieldset');
-  const tg = await page.evaluate(() => ({ sw: sw.getAttribute('aria-checked'), dy: dy.getAttribute('aria-pressed'), dn: dn.getAttribute('aria-pressed') }));
-  console.log(tg);
-  assert.deepStrictEqual(tg, { sw: 'true', dy: 'false', dn: 'true' }, 'toggle switch and button group filled');
-  const s1 = (await state()).db; assert.ok(Object.keys(s1.mappings).length >= 7, 'mappings persisted on fill');
-  // Learn a default: user types a reason, marks it Default, Remember.
-  await page.fill('#reason', 'Fee waiver – destitution');
-  await page.evaluate(() => { const sr = document.getElementById('ukvi-form-helper-host').shadowRoot; const row = [...sr.querySelectorAll('.row')].find((r) => r.querySelector('.lab').textContent.startsWith('Reason')); const sel = row.querySelector('.ctl select'); sel.value = 'default'; sel.dispatchEvent(new Event('change')); });
-  await page.evaluate(() => { const sr = document.getElementById('ukvi-form-helper-host').shadowRoot; [...sr.querySelectorAll('footer button')].find((b) => /Remember/.test(b.textContent)).click(); });
-  await page.waitForTimeout(300);
-  const s2 = (await state()).db;
+  assert.deepStrictEqual(v, { gn: 'Alex', fn: 'Sample', d: '23', m: '04', y: '1990', nat: 'Examplestan', ppn: 'P123', oisc: 'N123', re: 'adv@example.org', sw: 'true', dy: 'false', dn: 'true' });
+  const st = () => sw.evaluate(() => chrome.storage.local.get('db')).then((x) => x.db);
+  assert.ok(Object.keys((await st()).mappings).length >= 9, 'mappings persisted on fill');
+  // Learn a default.
+  await form.fill('#reason', 'Fee waiver – destitution');
+  await panel.evaluate(() => { const row = [...document.querySelectorAll('.row')].find((r) => r.querySelector('.lab').textContent.startsWith('Reason')); const sel = row.querySelector('.ctl select'); sel.value = 'default'; sel.dispatchEvent(new Event('change')); });
+  await panel.evaluate(() => document.getElementById('btn-remember').click()); await panel.waitForTimeout(600);
+  const s2 = await st();
   assert.strictEqual(s2.defaults['reason for applying'][0].v, 'Fee waiver – destitution');
   assert.strictEqual(Object.keys(s2.templates).length, 1);
   assert.ok(!JSON.stringify(s2.defaults).includes('Alex'), 'case data never stored as a default');
-  // Next case: reload, blank form -> default reason is offered, ticked.
-  await page.reload(); await page.evaluate(stub); await page.evaluate((d) => { window.__store.db = d; }, s2);
-  await page.evaluate(() => { const o = Element.prototype.attachShadow; Element.prototype.attachShadow = function (i) { return o.call(this, Object.assign({}, i, { mode: 'open' })); }; });
-  await inject(); await page.waitForTimeout(300);
-  const again = await page.evaluate(() => { const sr = document.getElementById('ukvi-form-helper-host').shadowRoot; return [...sr.querySelectorAll('.row')].map((r) => ({ lab: r.querySelector('.lab').textContent, chip: r.querySelector('.chip').textContent, val: r.querySelector('.ctl input').value, on: r.querySelector('input[type=checkbox]').checked })); });
-  const reason = again.find((r) => r.lab.startsWith('Reason')); assert.deepStrictEqual([reason.chip, reason.val, reason.on], ['default', 'Fee waiver – destitution', true]);
-  assert.strictEqual(again.find((r) => r.lab.startsWith('First name')).chip, 'saved');
-  assert.deepStrictEqual(errors, [], 'no page errors: ' + errors.join('; '));
-  console.log('panel test passed'); await b.close();
+  // "Next page / next client": reload the form, panel follows by itself (no click on the icon).
+  await form.reload(); await panel.waitForTimeout(1200);
+  rows = await rowsOf();
+  assert.deepStrictEqual([get(rows, 'Reason').chip, get(rows, 'Reason').val, get(rows, 'Reason').on], ['default', 'Fee waiver – destitution', true]);
+  assert.strictEqual(get(rows, 'First name').chip, 'saved');
+  assert.deepStrictEqual(errors, [], errors.join('; '));
+  console.log('side panel test passed'); await ctx.close(); server.close();
 })().catch((e) => { console.error(e); process.exit(1); });

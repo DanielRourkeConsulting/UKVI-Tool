@@ -1,0 +1,32 @@
+*{box-sizing:border-box;font-family:system-ui,"Segoe UI",Arial,sans-serif}
+html,body{height:100%;margin:0}
+body{display:flex;flex-direction:column;background:#fff;color:#1d1d1b;font-size:13px;line-height:1.35}
+header{display:flex;align-items:center;gap:6px;padding:8px 10px;background:#1d70b8;color:#fff}
+header b{flex:1;font-size:14px}
+header button{background:transparent;border:1px solid #fff8;color:#fff;border-radius:3px;cursor:pointer;padding:2px 7px}
+.bar{display:flex;gap:6px;align-items:center;padding:8px 10px;border-bottom:1px solid #ddd}
+.bar select{flex:1;min-width:0}
+.sum{padding:4px 10px;color:#505a5f;border-bottom:1px solid #eee;display:flex;gap:8px;align-items:center}
+.sum span{flex:1}
+.list{flex:1;overflow:auto;padding:6px 8px}
+.row{border:1px solid #ddd;border-radius:4px;padding:6px 8px;margin-bottom:6px;background:#fff}
+.row.off{background:#f7f7f7}
+.row.guess{border-color:#f47738;background:#fff8f0}
+.row.nomatch{border-color:#d4351c}
+.row.ok{border-color:#00703c}
+.top{display:flex;gap:6px;align-items:flex-start}
+.top input[type=checkbox]{margin-top:3px}
+.lab{flex:1;font-weight:600;word-break:break-word}
+.lab small{display:block;font-weight:400;color:#505a5f}
+.chip{font-size:11px;padding:1px 6px;border-radius:9px;background:#e5e5e5;white-space:nowrap}
+.chip.saved,.chip.edited{background:#cce2d8}.chip.default{background:#d2e2f1}.chip.guess{background:#fcd6c3}
+.ctl{display:flex;gap:6px;margin-top:5px}
+.ctl input,.ctl select{flex:1;min-width:0;padding:3px 5px;border:1px solid #999;border-radius:3px;font-size:12px}
+.ctl select{flex:0 0 46%}
+footer{padding:8px 10px;border-top:1px solid #ddd;display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+button.p{background:#00703c;color:#fff;border:0;border-radius:3px;padding:7px 12px;cursor:pointer;font-weight:600}
+button.s{background:#fff;color:#1d70b8;border:1px solid #1d70b8;border-radius:3px;padding:6px 10px;cursor:pointer}
+.status{flex-basis:100%;color:#505a5f;min-height:16px}
+.empty{padding:20px;color:#505a5f;text-align:center}
+.empty button{margin-top:12px}
+.empty code{background:#f3f2f1;padding:1px 4px;border-radius:3px}
