@@ -57,7 +57,7 @@ A plain array of flat records also works. Column/key names don't need to match: 
 
 - Top frame only (forms inside cross-origin iframes aren't reached).
 - Fields hidden until a previous answer is given appear after you click **Rescan**.
-- Custom widgets that aren't real `<input>`/`<select>` elements (e.g. some autocompletes) aren't detected.
+- Toggle buttons and switches (`aria-pressed`, `aria-checked`, `role=switch|checkbox|radio`) are supported. Other custom widgets that aren't real inputs (e.g. some autocompletes) aren't detected.
 - Fuzzy matching is by wording; always review orange guesses.
 
 ## Tests

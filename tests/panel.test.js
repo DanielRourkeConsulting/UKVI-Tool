@@ -10,7 +10,8 @@ const stub = `window.__store={};window.chrome={storage:{local:{get:async k=>({[k
   const U = require('../lib.js');
   const db = U.defaultDb();
   db.adviser = { oisc_number: 'N123', adviser_email: 'adv@example.org' };
-  db.cases = { C1: { data: { given_names: 'Alex', family_name: 'Sample', dob: '1990-04-23', nationality: 'Examplestan', passport_number: 'P123' } } };
+  db.cases = { C1: { data: { given_names: 'Alex', family_name: 'Sample', dob: '1990-04-23', nationality: 'Examplestan', passport_number: 'P123', receives_benefits: 'Yes', dependants: 'No' } } };
+  db.mappings = { 'receives benefits': 'case:receives_benefits', 'do you have dependants': 'case:dependants' };
   db.currentCase = 'C1';
   await page.evaluate((d) => { window.__store.db = d; }, db);
   const inject = async () => { await page.addScriptTag({ content: fs.readFileSync(path.join(root, 'lib.js'), 'utf8') }); await page.addScriptTag({ content: fs.readFileSync(path.join(root, 'content.js'), 'utf8') }); };
@@ -40,6 +41,9 @@ const stub = `window.__store={};window.chrome={storage:{local:{get:async k=>({[k
   assert.deepStrictEqual([v.gn, v.fn, v.d, v.m, v.y, v.nat, v.ppn], ['Alex', 'Sample', '23', '04', '1990', 'Examplestan', 'P123']);
   assert.strictEqual(v.oisc, 'N123', 'adviser fieldset OISC');
   assert.strictEqual(v.re, 'adv@example.org', 'adviser email in representative fieldset');
+  const tg = await page.evaluate(() => ({ sw: sw.getAttribute('aria-checked'), dy: dy.getAttribute('aria-pressed'), dn: dn.getAttribute('aria-pressed') }));
+  console.log(tg);
+  assert.deepStrictEqual(tg, { sw: 'true', dy: 'false', dn: 'true' }, 'toggle switch and button group filled');
   const s1 = (await state()).db; assert.ok(Object.keys(s1.mappings).length >= 7, 'mappings persisted on fill');
   // Learn a default: user types a reason, marks it Default, Remember.
   await page.fill('#reason', 'Fee waiver – destitution');

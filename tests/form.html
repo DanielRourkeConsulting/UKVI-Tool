@@ -15,6 +15,13 @@
 <fieldset><legend>Your representative</legend><label for="oisc">OISC registration number</label><input id="oisc"><label for="re">Email address</label><input id="re"></fieldset>
 <div><label for="reason">Reason for applying</label><textarea id="reason"></textarea></div>
 <div><label><input type="checkbox" id="decl"> I declare this is true</label></div>
+<div><span id="swl">Receives benefits</span> <button type="button" role="switch" aria-checked="false" aria-labelledby="swl" id="sw"></button></div>
+<fieldset><legend>Do you have dependants?</legend>
+ <button type="button" aria-pressed="false" id="dy">Yes</button><button type="button" aria-pressed="false" id="dn">No</button></fieldset>
+<script>
+document.getElementById('sw').addEventListener('click',function(){var b=this;setTimeout(function(){b.setAttribute('aria-checked',b.getAttribute('aria-checked')==='true'?'false':'true')},30)});
+['dy','dn'].forEach(function(id){document.getElementById(id).addEventListener('click',function(){document.getElementById('dy').setAttribute('aria-pressed',id==='dy');document.getElementById('dn').setAttribute('aria-pressed',id==='dn')})});
+</script>
 <input type="password" id="pw"><input type="hidden" id="hid">
 <button type="button" id="submit">Continue</button>
 </form></body></html>

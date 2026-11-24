@@ -61,9 +61,39 @@
     return '';
   }
 
+  // Custom toggle controls (buttons / divs with aria-pressed, aria-checked, role=switch|checkbox|radio).
+  const TOGGLE_SEL = '[role=switch],[role=checkbox],[role=radio],button[aria-pressed],[aria-checked]';
+  const isOn = (el) => (el.matches('input') ? el.checked : el.getAttribute('aria-checked') === 'true' || el.getAttribute('aria-pressed') === 'true');
+  function toggleText(el, asOption) {
+    const lb = el.getAttribute('aria-labelledby');
+    let t = lb ? lb.split(/\s+/).map((id) => txt(document.getElementById(id))).join(' ') : '';
+    if (!clean(t)) t = el.getAttribute('aria-label') || '';
+    if (!clean(t)) { const x = txt(el); if (x && x.length < 80 && (asOption || !/^(on|off|yes|no)$/i.test(x))) t = x; }
+    if (!clean(t)) { const l = el.closest('label'); if (l) t = txt(l); }
+    if (!clean(t)) t = precedingText(el) || precedingText(el.parentElement || el);
+    return clean(t) || U.humanise(el.id || 'toggle');
+  }
+  function toggleFields(toggles) {
+    const buckets = new Map();
+    toggles.forEach((el) => { const g = el.closest('fieldset,[role=radiogroup],[role=group]') || el.parentElement; if (!buckets.has(g)) buckets.set(g, []); buckets.get(g).push(el); });
+    const out = [];
+    buckets.forEach((els, g) => {
+      if (els.length >= 2) {
+        const label = groupOf(els[0]) || precedingText(g) || 'Choose one';
+        out.push({ kind: 'radio', els, el: els[0], label, group: '', options: els.map((e) => ({ text: toggleText(e, true), value: e.value || '', el: e })) });
+      } else {
+        out.push({ kind: 'checkbox', el: els[0], els, label: toggleText(els[0]), group: groupOf(els[0]) });
+      }
+    });
+    return out;
+  }
+
   function scan() {
     const out = [], seenRadio = new Set(), seenFp = {};
-    for (const el of document.querySelectorAll('input,select,textarea')) {
+    const toggles = [], seenEl = new Set();
+    for (const el of document.querySelectorAll('input,select,textarea,' + TOGGLE_SEL)) {
+      if (seenEl.has(el)) continue; seenEl.add(el);
+      if (!/^(INPUT|SELECT|TEXTAREA)$/.test(el.tagName)) { if (el.getClientRects().length && !el.disabled && el.getAttribute('aria-disabled') !== 'true') toggles.push(el); continue; }
       const type = (el.type || '').toLowerCase();
       if (el.tagName === 'INPUT' && ['hidden', 'password', 'submit', 'button', 'reset', 'image', 'file', 'search', 'range', 'color'].includes(type)) continue;
       if (el.disabled || el.readOnly || !shown(el)) continue;
@@ -82,20 +112,24 @@
       } else {
         f = { kind: 'text', inputType: type || 'text', el, els: [el], label: ownLabel(el), group: groupOf(el) };
       }
+      out.push(f);
+    }
+    out.push(...toggleFields(toggles));
+    // Final tidy of every field: group/label overlap, date part, display name, stable fingerprint.
+    out.forEach((f) => {
       if (f.group && U.norm(f.group) === U.norm(f.label)) f.group = '';
-      f.part = f.kind === 'text' || f.kind === 'select' ? partOf(el, f.label) : '';
+      f.part = f.kind === 'text' || f.kind === 'select' ? partOf(f.el, f.label) : '';
       f.display = f.group ? f.group + ' › ' + f.label : f.label;
       let fp = U.norm(f.display);
       if (seenFp[fp]) { seenFp[fp]++; fp += ' #' + seenFp[fp]; } else seenFp[fp] = 1;
       f.fp = fp;
-      out.push(f);
-    }
+    });
     return out;
   }
 
   function current(f) {
-    if (f.kind === 'radio') { const o = f.options.find((x) => x.el.checked); return o ? o.text : ''; }
-    if (f.kind === 'checkbox') return f.el.checked ? 'yes' : 'no';
+    if (f.kind === 'radio') { const o = f.options.find((x) => isOn(x.el)); return o ? o.text : ''; }
+    if (f.kind === 'checkbox') return isOn(f.el) ? 'yes' : 'no';
     if (f.kind === 'select') { const o = f.el.selectedOptions[0]; return o && o.value !== '' ? o.text.trim() : ''; }
     return f.el.value || '';
   }
@@ -121,10 +155,28 @@
     return [value];
   }
 
-  function applyValue(f, value) {
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  // Click a checkbox / radio / toggle button and make sure it really changed; try harder if not.
+  async function press(el, want) {
+    if (isOn(el) === want) return true;
+    el.click(); await sleep(80);
+    if (isOn(el) === want) return true;
+    const lab = el.labels && el.labels[0];
+    if (lab) { lab.click(); await sleep(80); if (isOn(el) === want) return true; }
+    for (const t of ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click']) el.dispatchEvent(new MouseEvent(t, { bubbles: true, cancelable: true, view: window }));
+    await sleep(80);
+    if (isOn(el) === want) return true;
+    if (!el.matches('input')) {
+      for (const t of ['keydown', 'keyup']) el.dispatchEvent(new KeyboardEvent(t, { key: ' ', code: 'Space', bubbles: true }));
+      await sleep(80);
+    }
+    return isOn(el) === want;
+  }
+
+  async function applyValue(f, value) {
     const c = candidatesFor(f, value);
     if (f.kind === 'text') { setNative(f.el, c[0]); fire(f.el); return 'filled'; }
-    if (f.kind === 'checkbox') { const want = U.isTruthy(value); if (f.el.checked !== want) f.el.click(); return 'filled'; }
+    if (f.kind === 'checkbox') return (await press(f.el, U.isTruthy(value))) ? 'filled' : 'nomatch';
     if (f.kind === 'select') {
       const i = U.pickOption(f.options, c);
       if (i < 0) return 'nomatch';
@@ -133,8 +185,7 @@
     if (f.kind === 'radio') {
       const i = U.pickOption(f.options, c);
       if (i < 0) return 'nomatch';
-      if (!f.options[i].el.checked) f.options[i].el.click();
-      return 'filled';
+      return (await press(f.options[i].el, true)) ? 'filled' : 'nomatch';
     }
     return 'skipped';
   }
@@ -331,7 +382,7 @@ a.lnk{color:#fff;font-size:12px}
     for (const r of rows) {
       r.status = '';
       if (!r.include || r.value === '') continue;
-      const res = applyValue(r.f, r.value);
+      const res = await applyValue(r.f, r.value);
       if (res === 'filled') { ok++; r.status = 'ok'; if (r.origin === 'guess') r.origin = 'saved'; } else { bad++; r.status = 'nomatch'; }
     }
     db = await U.load(); await persistMappings();
