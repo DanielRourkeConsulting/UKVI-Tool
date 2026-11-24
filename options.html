@@ -13,6 +13,7 @@
 </header>
 <nav id="tabs" role="tablist">
   <button data-tab="cases" class="on">Case data</button>
+  <button data-tab="template">Case template</button>
   <button data-tab="adviser">Adviser (every form)</button>
   <button data-tab="learned">Learned forms &amp; defaults</button>
   <button data-tab="backup">Backup &amp; Copilot help</button>
@@ -37,6 +38,14 @@
     <h2>Saved cases</h2>
     <div class="row"><select id="case-select"></select><button id="btn-use">Use for filling</button><button id="btn-del-case" class="danger">Delete case</button></div>
     <div id="case-editor"></div>
+  </section>
+
+  <section id="tab-template" hidden>
+    <h2>Case template</h2>
+    <p>Everything a client needs to provide, built from the forms you've remembered. Each item shows the forms that ask for it.</p>
+    <div id="tpl-list"></div>
+    <h3>Add an item by hand</h3>
+    <div class="row"><input type="text" id="tpl-key" list="keys-case" placeholder="item name, e.g. passport_number"><button id="btn-tpl-add">Add</button></div>
   </section>
 
   <section id="tab-adviser" hidden>

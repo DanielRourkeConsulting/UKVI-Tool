@@ -27,6 +27,7 @@
     document.querySelectorAll('#tabs button').forEach((x) => x.classList.toggle('on', x === b));
     document.querySelectorAll('main > section').forEach((s) => { s.hidden = s.id !== 'tab-' + b.dataset.tab; });
     if (b.dataset.tab === 'learned') renderLearned();
+    if (b.dataset.tab === 'template') renderTemplate();
   }));
 
   function fillKeyLists() {
@@ -151,7 +152,7 @@
   function renderLearned() {
     listWith('#tmpl-list', Object.entries(db.templates).sort((a, b) => b[1].updated - a[1].updated).map(([id, t]) => ({
       content: [el('b', { text: t.title || id }), ' ', el('span', { class: 'pill', text: t.fields.length + ' fields' }), ' ', el('small', { text: t.url + ' · ' + new Date(t.updated).toLocaleDateString('en-GB') })],
-      remove: async () => { delete db.templates[id]; delete db.tmplMappings[id]; await persist(); renderLearned(); }
+      remove: async () => { delete db.templates[id]; delete db.tmplMappings[id]; U.removeFormFromTemplate(db, id); await persist(); renderLearned(); }
     })), 'No forms remembered yet. Open a form, click the extension icon, then "Remember this page".');
     listWith('#map-list', Object.entries(db.mappings).sort().map(([fp, ref]) => ({
       content: [fp, ' → ', el('span', { class: 'pill', text: U.refLabel(ref, db) })],
@@ -166,6 +167,26 @@
       remove: async () => { delete db.importMaps[raw]; await persist(); renderLearned(); }
     })), 'None yet.');
   }
+
+  // ---------- Case template ----------
+  function renderTemplate() {
+    const items = Object.entries(db.caseTemplate.items).sort((a, b) => a[1].label.localeCompare(b[1].label));
+    listWith('#tpl-list', items.map(([key, it]) => {
+      const forms = Object.entries(it.forms);
+      return {
+        content: [el('b', { text: it.label }), ' ', el('small', { text: key }), ' ',
+          forms.length ? forms.map(([tid, f]) => el('span', { class: 'pill', title: f.fields.join(', '), text: f.title })) : el('span', { class: 'pill', text: 'added by hand' })],
+        remove: async () => { delete db.caseTemplate.items[key]; await persist(); renderTemplate(); }
+      };
+    }), 'Nothing yet. Open a form in the side panel, link its fields to case data, and click "Remember this page".');
+  }
+  $('#btn-tpl-add').addEventListener('click', async () => {
+    const key = U.slug($('#tpl-key').value); if (!key) return;
+    const e = U.entries(db, 'case').find((x) => x.key === key);
+    db.caseTemplate.items[key] = db.caseTemplate.items[key] || { label: e ? e.label : U.humanise(key), forms: {}, manual: true };
+    db.caseTemplate.items[key].manual = true;
+    $('#tpl-key').value = ''; await persist(); renderTemplate();
+  });
 
   // ---------- Backup ----------
   $('#btn-export').addEventListener('click', () => download('ukvi-form-helper-backup-' + new Date().toISOString().slice(0, 10) + '.json', JSON.stringify({ ukviHelperBackup: 1, db }, null, 2)));

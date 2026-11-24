@@ -35,6 +35,8 @@ It never submits a form. It only fills fields you tick, and highlights each fiel
 3. **Fill ticked fields.** Choices you made are saved automatically. Check every answer.
 4. Finish the page yourself, then **Remember this page**: saves the layout and learns your typed answers for fields set to *Default*.
 
+**Case template.** Each time you click *Remember this page* (with "Add to case template" ticked), every field linked to case data is added to one shared list of what clients need to provide, together with the forms that ask for it. Adviser data and learned defaults are left out because they aren't the client's. View or edit the list on the options page → *Case template*; an export for clients is planned.
+
 Dates held as `YYYY-MM-DD` are split automatically into Day / Month / Year boxes or dropdowns, or written `dd/mm/yyyy` in a single box.
 
 Case data is never turned into a default, so one client's details can't be offered to the next.

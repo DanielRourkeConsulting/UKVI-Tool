@@ -65,4 +65,13 @@ t('defaults counting', () => {
 t('template id ignores long ids', () => {
   assert.strictEqual(U.templateId('https://x.gov.uk/apply/12345678/step?x=1', 'Your Name!'), 'x.gov.uk/apply/*/step#your name');
 });
+t('case template accumulates items across forms', () => {
+  const db = U.defaultDb();
+  assert.strictEqual(U.addToTemplate(db, 'f1', 'Form one', [{ key: 'dob', fieldLabel: 'Date of birth day' }, { key: 'dob', fieldLabel: 'Date of birth month' }, { key: 'nino', fieldLabel: 'NI' }]), 2);
+  assert.strictEqual(U.addToTemplate(db, 'f2', 'Form two', [{ key: 'dob', fieldLabel: 'Birth date' }]), 0);
+  assert.deepStrictEqual(Object.keys(db.caseTemplate.items.dob.forms), ['f1', 'f2']);
+  assert.strictEqual(db.caseTemplate.items.dob.label, 'Date of birth');
+  U.removeFormFromTemplate(db, 'f1');
+  assert.ok(!db.caseTemplate.items.nino && db.caseTemplate.items.dob);
+});
 console.log(n + ' tests passed');

@@ -122,7 +122,7 @@
 
   // ---------- Refresh (tab changed, page loaded, Rescan) ----------
   async function refresh() {
-    db = await U.load(); fillCaseSelect();
+    db = await U.load(); fillCaseSelect(); $('#chk-template').checked = !!db.prefs.addToTemplate;
     tab = await activeTab();
     originPattern = tab && tab.url ? originOf(tab.url) : '';
     if (!originPattern) { showState([el('p', { text: 'Open a UKVI form page in this window.' })]); return; }
@@ -167,13 +167,21 @@
     }
     db.templates[tid] = { title: heading, url: fresh.url, updated: Date.now(),
       fields: rows.map((r) => ({ fp: r.fp, label: r.f.display, kind: r.f.kind, part: r.f.part || '', options: r.f.options.slice(0, 40).map((o) => o.text) })) };
+    // Case-data items this page needs go into the common case template (adviser data and defaults are ours, not the client's).
+    let tplMsg = '';
+    if ($('#chk-template').checked) {
+      const uses = rows.filter((r) => !skipPersist(r) && r.ref.startsWith('case:')).map((r) => ({ key: r.ref.slice(5), fieldLabel: r.f.display }));
+      const added = U.addToTemplate(db, tid, heading || tid, uses);
+      tplMsg = ' ' + uses.length + ' item' + (uses.length === 1 ? '' : 's') + ' in the case template (' + added + ' new).';
+    }
     await U.save(db); overrides.clear();
     buildRows(fresh);
-    msg = 'Saved this page layout (' + rows.length + ' fields) and ' + learned + ' default value' + (learned === 1 ? '' : 's') + '.'; render();
+    msg = 'Saved this page layout (' + rows.length + ' fields) and ' + learned + ' default value' + (learned === 1 ? '' : 's') + '.' + tplMsg; render();
   }
 
   $('#btn-fill').addEventListener('click', doFill);
   $('#btn-remember').addEventListener('click', doRemember);
+  $('#chk-template').addEventListener('change', async (e) => { db = await U.load(); db.prefs.addToTemplate = e.target.checked; await U.save(db); });
   $('#btn-rescan').addEventListener('click', refresh);
   $('#btn-opts').addEventListener('click', () => chrome.runtime.openOptionsPage());
   $('#filter').addEventListener('change', (e) => { filter = e.target.value; render(); });
