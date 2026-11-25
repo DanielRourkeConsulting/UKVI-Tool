@@ -338,7 +338,7 @@
     await U.save(db); selTpl.add(id); inp.value = ''; renderTpls();
   });
   // Rescan in Capture: whatever the adviser has typed on the page becomes that field's default text
-  // (not for case or adviser items: client data is never a default). Remember this page saves it.
+  // (not for case or adviser items: client data is never a default). The Capture button saves it.
   function adoptPageValues() {
     let n = 0;
     for (const r of rows) {

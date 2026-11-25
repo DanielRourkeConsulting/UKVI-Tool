@@ -153,7 +153,7 @@
     listWith('#tmpl-list', Object.entries(db.templates).sort((a, b) => b[1].updated - a[1].updated).map(([id, t]) => ({
       content: [el('b', { text: t.title || id }), ' ', el('span', { class: 'pill', text: t.fields.length + ' fields' }), ' ', el('small', { text: t.url + ' · ' + new Date(t.updated).toLocaleDateString('en-GB') })],
       remove: async () => { delete db.templates[id]; delete db.tmplMappings[id]; U.removeFormFromTemplates(db, id); await persist(); renderLearned(); }
-    })), 'No forms remembered yet. Open a form, click the extension icon, then "Remember this page".');
+    })), 'No forms remembered yet. Open a form, click the extension icon, then Capture in Capture mode.');
     listWith('#map-list', Object.entries(db.mappings).sort().map(([fp, ref]) => ({
       content: [fp, ' → ', el('span', { class: 'pill', text: U.refLabel(ref, db) })],
       remove: async () => { delete db.mappings[fp]; Object.values(db.tmplMappings).forEach((m) => delete m[fp]); await persist(); renderLearned(); }
@@ -186,7 +186,7 @@
           forms.length ? forms.map(([pid, f]) => el('span', { class: 'pill', title: f.fields.join(', '), text: f.title })) : el('span', { class: 'pill', text: 'added by hand' })],
         remove: async () => { delete t.items[key]; await persist(); renderTemplate(); }
       };
-    }), 'Nothing in this template yet. Open a form in the side panel, link its fields to case data, tick this template and click "Remember this page".');
+    }), 'Nothing in this template yet. Open a form in the side panel, link its fields to case data, tick this template and click Capture.');
   }
   $('#tpl-select').addEventListener('change', (e) => { tplSel = e.target.value; renderTemplate(); });
   $('#btn-tpl-create').addEventListener('click', async () => {

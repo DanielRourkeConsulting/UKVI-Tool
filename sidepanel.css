@@ -30,7 +30,7 @@ header button:hover { background: rgba(255,255,255,.12); color: var(--gold); }
 .ctl input, .ctl select { flex: 1; min-width: 0; padding: 4px 8px; font-size: .8rem; }
 .ctl select { flex: 0 0 46%; font-weight: 600; }
 footer { padding: 10px 14px; background: var(--surface-2); border-top: 1px solid var(--border); display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
-.status { flex-basis: 100%; color: var(--ink-soft); min-height: 16px; font-size: .78rem; }
+.status { flex: 1; color: var(--ink-soft); min-height: 16px; font-size: .78rem; }
 .empty { padding: 24px 16px; color: var(--ink-soft); text-align: center; background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); }
 .empty button { margin-top: 12px; }
 .empty code { background: var(--surface-2); padding: 1px 6px; border-radius: 6px; }
@@ -43,7 +43,8 @@ body[data-mode=fill] { --mode-page: #D6E8DA; --mode-foot: #C2DCC8; }
   body[data-mode=fill] { --mode-page: #12382A; --mode-foot: #184634; --bar-pill: #0B2219; --bar-pill-edge: #3E7C43; }
 }
 body .bar, body .sum, body .list { background: var(--mode-page); }
-body footer { background: var(--mode-foot); }
+body footer { background: #f8ede0; border-top-color: #E8D9BF; }
+@media (prefers-color-scheme: dark) { body footer { background: var(--surface-2); border-top-color: var(--border); } }
 /* Main buttons keep the dark green pill in Capture (the header's gold would hide their gold text). */
 body[data-mode=capture] button.p, body[data-mode=capture] button.p:hover { background: #1D3B2F; color: var(--gold); border-color: #1D3B2F; }
 body[data-mode=capture] button.p:hover { border-color: var(--gold); }
@@ -99,9 +100,27 @@ details.page.here > summary .pnum { background: var(--gold); color: #1D3B2F; }
 .pdel button { font-size: .75rem; padding: 3px 10px; }
 .pdel button.armed { background: var(--flag); color: #fff; }
 .ctl input:disabled { background: var(--surface-2); color: var(--ink-soft); }
-.tpls { flex-basis: 100%; border-top: 1px solid var(--border); padding-top: 8px; }
-.tpls b { display: block; margin-bottom: 4px; font-size: .78rem; }
 #tpl-chips { display: flex; flex-wrap: wrap; gap: 4px 12px; }
 #tpl-chips label { display: flex; gap: 5px; align-items: center; }
-.tpl-new { display: flex; gap: 6px; margin-top: 8px; }
+.tpl-new { display: flex; gap: 6px; flex: 0 1 170px; min-width: 120px; }
 .tpl-new input { flex: 1; min-width: 0; padding: 4px 8px; }
+
+/* ---- Header: mode switch, the mode's action beside it, settings at the far right ---- */
+header .modes { margin-left: auto; }
+.modes button { display: inline-flex; align-items: center; gap: 5px; padding: 3px 11px 3px 9px; }
+.modes button svg { width: 13px; height: 13px; }
+header button.act2 { display: inline-flex; align-items: center; gap: 6px; padding: 4px 11px 4px 9px; font-size: .8rem; font-weight: 600; border: 1px solid currentColor; }
+header button.act2:hover { color: var(--bar-pill-ink); background: rgba(255,255,255,.12); }
+body[data-mode=capture] header button.act2:hover { background: rgba(29,59,47,.12); }
+footer #btn-opts { flex: none; background: transparent; border: 0; padding: 3px 8px; font-size: 1rem; color: var(--ink-soft); }
+footer #btn-opts:hover { color: var(--ink); }
+header button.act { display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px 4px 10px; font-weight: 600; font-size: .8rem; background: var(--gold); color: #1D3B2F; border: 1px solid var(--gold); }
+header button.act:hover { background: #F2BE66; color: #1D3B2F; }
+header button.act svg, header button.act2 svg, .modes svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+body[data-mode=capture] header button.act { background: #1D3B2F; color: var(--gold); border-color: #1D3B2F; }
+body[data-mode=capture] header button.act:hover { background: #2A5242; color: var(--gold); }
+.bar.tpls { flex-wrap: wrap; }
+#tpl-chips { flex: 1 1 auto; }
+footer .logo { height: 30px; width: auto; flex: none; }
+footer .logo-dark { display: none; }
+@media (prefers-color-scheme: dark) { footer .logo-light { display: none; } footer .logo-dark { display: block; } }
