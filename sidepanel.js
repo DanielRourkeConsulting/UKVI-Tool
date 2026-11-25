@@ -5,6 +5,21 @@
   const U = window.UKVI;
   const $ = (s) => document.querySelector(s);
   let selTpl = new Set(['common']), db, tab = null, rows = [], overrides = new Map(), filter = 'all', tid = '', heading = '', msg = '', originPattern = '', timer = null;
+  // Two modes: 'capture' (learn this form's layout and the default text for each field) and 'fill' (put answers in).
+  let mode = '';
+
+  // ---------- Mode ----------
+  function showMode() {
+    document.body.dataset.mode = mode;
+    document.querySelectorAll('.modes button').forEach((b) => b.setAttribute('aria-checked', String(b.dataset.mode === mode)));
+  }
+  async function setMode(m) {
+    if (m === mode) return;
+    mode = m; msg = ''; showMode();
+    const d = await U.load(); d.prefs.mode = m; await U.save(d);
+    if (db) db.prefs.mode = m;
+    if (rows.length) render();
+  }
 
   const el = (tag, props, ...kids) => {
     const e = document.createElement(tag);
@@ -65,7 +80,8 @@
     });
   }
 
-  const skipPersist = (r) => (r.origin === 'guess' && !r.include) || (r.origin === 'none' && !overrides.has(r.fp));
+  // In Capture the adviser sets every source on purpose, so a guess left in place is accepted; in Fill only a ticked one is.
+  const skipPersist = (r) => (r.origin === 'guess' && !r.include && mode !== 'capture') || (r.origin === 'none' && !overrides.has(r.fp));
   async function persistMappings() {
     const tm = (db.tmplMappings[tid] = db.tmplMappings[tid] || {});
     for (const r of rows) { if (skipPersist(r)) continue; tm[r.fp] = r.ref; if (r.ref !== 'none') db.mappings[r.fp] = r.ref; }
@@ -99,8 +115,10 @@
     });
     s.value = r.ref;
     s.addEventListener('change', () => {
-      r.ref = s.value; r.origin = 'edited'; r.value = U.refValue(r.ref, db, r.fp); r.include = r.value !== '';
-      overrides.set(r.fp, { ref: r.ref }); render();
+      const typed = (overrides.get(r.fp) || {}).value;
+      r.ref = s.value; r.origin = 'edited';
+      r.value = r.ref === 'default' && typed ? typed : U.refValue(r.ref, db, r.fp); r.include = r.value !== '';
+      overrides.set(r.fp, r.ref === 'default' && typed ? { ref: r.ref, value: typed } : { ref: r.ref }); render();
     });
     return s;
   }
@@ -109,20 +127,31 @@
     const list = $('#list'); list.textContent = '';
     const ready = rows.filter((r) => r.include).length;
     renderTpls();
-    $('#summary').textContent = rows.length + ' fields · ' + ready + ' ready';
+    $('#summary').textContent = rows.length + ' fields' + (mode === 'fill' ? ' · ' + ready + ' ready' : '');
     if (!rows.length) { list.append(el('div', { class: 'empty', text: 'No fillable fields found on this page.' })); $('#status').textContent = msg; return; }
     const vis = rows.filter((r) => filter === 'all' || (filter === 'ready' ? r.include : (r.origin === 'guess' || r.origin === 'none' || (r.value === '' && r.ref !== 'none'))));
+    const capture = mode === 'capture';
     vis.forEach((r) => {
-      const cb = el('input', { type: 'checkbox', checked: r.include, 'aria-label': 'Fill this field' });
-      cb.addEventListener('change', () => { r.include = cb.checked; row.classList.toggle('off', !r.include); });
-      const inp = el('input', { type: 'text', 'aria-label': 'Value to fill', placeholder: r.f.kind === 'checkbox' ? 'yes / no' : 'value' });
+      const cb = capture ? null : el('input', { type: 'checkbox', checked: r.include, 'aria-label': 'Fill this field' });
+      if (cb) cb.addEventListener('change', () => { r.include = cb.checked; row.classList.toggle('off', !r.include); });
+      // Capture: the box holds the default text for next time (case and adviser items show their value, locked).
+      // Fill: the box holds the value about to go in, which can be changed for this time only.
+      const fromData = r.ref.startsWith('case:') || r.ref.startsWith('adviser:');
+      const inp = el('input', { type: 'text', 'aria-label': capture ? 'Default text' : 'Value to fill',
+        placeholder: capture ? (fromData ? '' : 'default text') : (r.f.kind === 'checkbox' ? 'yes / no' : 'value'),
+        disabled: capture && fromData });
       inp.value = r.value;
       const dlId = 'dl' + r.f.id;
       if (r.f.options.length) inp.setAttribute('list', dlId);
-      inp.addEventListener('input', () => { r.value = inp.value; r.include = inp.value !== ''; cb.checked = r.include; overrides.set(r.fp, { ref: r.ref, value: inp.value }); });
-      const row = el('div', { class: 'row ' + (r.include ? '' : 'off') + ' ' + (r.origin === 'guess' ? 'guess' : '') + ' ' + r.status },
-        el('div', { class: 'top' }, cb, el('div', { class: 'lab' }, r.f.label, r.f.group ? el('small', { text: r.f.group }) : null), el('span', { class: 'chip ' + r.origin, text: chipText[r.origin] })),
-        el('div', { class: 'ctl' }, inp, sourceSelect(r)));
+      const chip = el('span', { class: 'chip ' + r.origin, text: chipText[r.origin] });
+      inp.addEventListener('input', () => {
+        if (capture && r.ref !== 'default') { r.ref = 'default'; r.origin = 'edited'; chip.className = 'chip edited'; chip.textContent = chipText.edited; sel.value = 'default'; }
+        r.value = inp.value; r.include = inp.value !== ''; if (cb) cb.checked = r.include; overrides.set(r.fp, { ref: r.ref, value: inp.value });
+      });
+      const sel = capture ? sourceSelect(r) : null;
+      const row = el('div', { class: 'row ' + (r.include || capture ? '' : 'off') + ' ' + (r.origin === 'guess' ? 'guess' : '') + ' ' + r.status },
+        el('div', { class: 'top' }, cb, el('div', { class: 'lab' }, r.f.label, r.f.group ? el('small', { text: r.f.group }) : null), chip),
+        el('div', { class: 'ctl' }, inp, sel));
       if (r.f.options.length) { const dl = el('datalist', { id: dlId }); r.f.options.slice(0, 200).forEach((o) => dl.append(el('option', { value: o.text }))); row.append(dl); }
       row.addEventListener('mouseenter', () => ask({ type: 'flash', id: r.f.id, on: true }).catch(() => {}));
       row.addEventListener('mouseleave', () => ask({ type: 'flash', id: r.f.id, on: false }).catch(() => {}));
@@ -134,6 +163,7 @@
   // ---------- Refresh (tab changed, page loaded, Rescan) ----------
   async function refresh() {
     db = await U.load(); fillCaseSelect();
+    if (!mode) { mode = db.prefs.mode || (Object.keys(db.templates).length ? 'fill' : 'capture'); showMode(); }
     tab = await activeTab();
     originPattern = tab && tab.url ? originOf(tab.url) : '';
     if (!originPattern) { showState([el('p', { text: 'Open a UKVI form page in this window.' })]); return; }
@@ -174,7 +204,8 @@
       if (skipPersist(r)) continue;
       tm[r.fp] = r.ref;
       if (r.ref !== 'none') db.mappings[r.fp] = r.ref;
-      if (r.ref === 'default') { const typed = curByFp[r.fp] || r.value; if (typed && typed !== 'no') { U.addDefault(db, r.fp, typed); learned++; } }
+      // The default text in the panel's box wins; an empty box takes what is typed on the page.
+      if (r.ref === 'default') { const typed = r.value || curByFp[r.fp]; if (typed && typed !== 'no') { U.addDefault(db, r.fp, typed); learned++; } }
     }
     db.templates[tid] = { title: heading, url: fresh.url, updated: Date.now(),
       fields: rows.map((r) => ({ fp: r.fp, label: r.f.display, kind: r.f.kind, part: r.f.part || '', options: r.f.options.slice(0, 40).map((o) => o.text) })) };
@@ -198,6 +229,7 @@
     await U.save(db); selTpl.add(id); inp.value = ''; renderTpls();
   });
   $('#btn-rescan').addEventListener('click', refresh);
+  document.querySelectorAll('.modes button').forEach((b) => b.addEventListener('click', () => setMode(b.dataset.mode)));
   $('#btn-opts').addEventListener('click', () => chrome.runtime.openOptionsPage());
   $('#filter').addEventListener('change', (e) => { filter = e.target.value; render(); });
   $('#case-sel').addEventListener('change', async (e) => { db.currentCase = e.target.value || null; await U.save(db); refresh(); });
@@ -206,6 +238,6 @@
   chrome.tabs.onUpdated.addListener((id, info) => { if (tab && id === tab.id && info.status === 'complete') schedule(); });
   chrome.windows.onFocusChanged.addListener(schedule);
   chrome.permissions.onAdded.addListener(schedule);
-  window.__ukviTest = { refresh, state: () => ({ rows, tid }) };
+  window.__ukviTest = { refresh, setMode, state: () => ({ rows, tid, mode }) };
   refresh();
 })();

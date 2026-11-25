@@ -3,7 +3,7 @@ const { chromium } = require('playwright'); const path = require('path'), os = r
 (async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ukvi-'));
   const ext = path.join(__dirname, '..');
-  const ctx = await chromium.launchPersistentContext(dir, { headless: false, args: ['--headless=new', '--disable-extensions-except=' + ext, '--load-extension=' + ext, '--no-sandbox'] });
+  const ctx = await chromium.launchPersistentContext(dir, { headless: false, executablePath: process.env.CHROMIUM_PATH || undefined, args: ['--headless=new', '--disable-extensions-except=' + ext, '--load-extension=' + ext, '--no-sandbox'] });
   let [sw] = ctx.serviceWorkers(); if (!sw) sw = await ctx.waitForEvent('serviceworker', { timeout: 15000 });
   const id = sw.url().split('/')[2];
   const page = await ctx.newPage(); const errs = [];

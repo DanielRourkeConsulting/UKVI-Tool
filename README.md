@@ -29,11 +29,12 @@ It never submits a form. It only fills fields you tick, and highlights each fiel
 1. **Options page** (right-click the icon → Extension options, or ⚙ in the panel).
    - *Adviser*: enter your details once.
    - *Case data*: choose or paste your export → check the column-name table → **Import**. Your column-name choices are remembered, so next month's export maps itself.
-2. Open a UKVI form page → click the icon (or Alt+Shift+U) → on a new site click **Allow on this site** once. The panel follows you as the form moves from page to page, and when you switch tabs. For each field you get a row with a value, where it came from and a source dropdown (case item, adviser item, default, or skip).
-   - **Green "saved"** = linked before. **Blue "default"** = learned answer. **Orange "guess"** = matched by wording only; not ticked until you tick it.
-   - Fields that already contain something different are not ticked.
-3. **Fill ticked fields.** Choices you made are saved automatically. Check every answer.
-4. Finish the page yourself, then **Remember this page**: saves the layout and learns your typed answers for fields set to *Default*.
+2. Open a UKVI form page → click the icon (or Alt+Shift+U) → on a new site click **Allow on this site** once. The panel follows you as the form moves from page to page, and when you switch tabs.
+3. The panel has two modes, switched at any time with **Capture | Fill** in its header. The whole panel turns **gold in Capture** and **green in Fill**, so you can always see which one you're in. The panel remembers the last mode you used (it starts in Capture until you've saved a page).
+   - **Capture** learns a form. Each field has a source dropdown (case item, adviser item, default or skip) and a box for its **default text**: what to put in next time. Typing in the box makes the field a *Default*. For case and adviser items, the box shows the current value, locked. **Remember this page** saves the layout, the sources and the default text (an empty default box takes what's typed on the page), and adds the case items to the ticked templates.
+   - **Fill** uses what was captured. Each field has a tick box and the value about to go in, which you can change for this time only. **Fill ticked fields** puts them into the page. Check every answer.
+   - **Green "saved"** = linked before. **Blue "default"** = learned answer. **Orange "guess"** = matched by wording only. In Fill it's not ticked until you tick it; in Capture, Remember accepts it unless you set it to *Skip*.
+   - In Fill, fields that already contain something different are not ticked.
 
 **Case templates.** *Common to all forms* is a built-in template for client information every form needs; you can create more (for example one per commonly used form) in the side panel or on the options page → *Case templates*. When you click *Remember this page*, tick which templates its case items go into (one or several); the page remembers its choice. Each item records which forms ask for it. Adviser data and learned defaults are left out because they aren't the client's. An export for clients is planned.
 
@@ -68,7 +69,8 @@ A plain array of flat records also works. Column/key names don't need to match: 
 ```
 node tests/unit.js            # matching, CSV/JSON import, dates
 node tests/privacy-check.js   # no network / remote code / extra permissions
-node tests/panel.test.js      # real extension + side panel on a fake form (needs Playwright + Chromium)
+node tests/panel.test.js      # real extension + side panel on a fake form, both modes (needs Playwright + Chromium;
+                              #   CHROMIUM_PATH=...\msedge.exe runs both browser tests in Edge instead)
 node tests/extension.test.js  # loads the real unpacked extension, imports a CSV
 node tools/make-icons.js      # regenerate icons
 ```

@@ -32,6 +32,30 @@ footer { padding: 10px 14px; background: var(--surface-2); border-top: 1px solid
 .empty { padding: 24px 16px; color: var(--ink-soft); text-align: center; background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); }
 .empty button { margin-top: 12px; }
 .empty code { background: var(--surface-2); padding: 1px 6px; border-radius: 6px; }
+/* ---- Modes: the whole panel takes the mode's colour (Capture = gold, Fill = green) ---- */
+body { --mode-page: var(--page); --mode-foot: var(--surface-2); }
+body[data-mode=capture] { --mode-page: #FBE3B3; --mode-foot: #F6D48E; --bar-pill: #E9A843; --bar-pill-ink: #1D3B2F; --bar-pill-edge: #C98B2A; }
+body[data-mode=fill] { --mode-page: #D6E8DA; --mode-foot: #C2DCC8; }
+@media (prefers-color-scheme: dark) {
+  body[data-mode=capture] { --mode-page: #3B2F17; --mode-foot: #4A3A1A; --bar-pill: #E9A843; --bar-pill-ink: #1D3B2F; --bar-pill-edge: #E9A843; }
+  body[data-mode=fill] { --mode-page: #12382A; --mode-foot: #184634; --bar-pill: #0B2219; --bar-pill-edge: #3E7C43; }
+}
+body .bar, body .sum, body .list { background: var(--mode-page); }
+body footer { background: var(--mode-foot); }
+/* Main buttons keep the dark green pill in Capture (the header's gold would hide their gold text). */
+body[data-mode=capture] button.p, body[data-mode=capture] button.p:hover { background: #1D3B2F; color: var(--gold); border-color: #1D3B2F; }
+body[data-mode=capture] button.p:hover { border-color: var(--gold); }
+body[data-mode=capture] header b::before { background: var(--bar-pill-ink); }
+body[data-mode=capture] header button:hover { background: rgba(29,59,47,.12); color: var(--bar-pill-ink); }
+.modes { display: flex; padding: 2px; border-radius: var(--r-pill); background: rgba(0,0,0,.18); }
+.modes button { border: 0; border-radius: var(--r-pill); padding: 3px 12px; font-size: .78rem; background: transparent; color: var(--bar-pill-ink); opacity: .75; }
+.modes button:hover { opacity: 1; background: rgba(255,255,255,.12); }
+.modes button[aria-checked=true] { opacity: 1; background: var(--gold); color: #1D3B2F; }
+body[data-mode=capture] .modes button[aria-checked=true] { background: #1D3B2F; color: var(--gold); }
+body[data-mode=capture] .modes button:hover { background: rgba(29,59,47,.12); color: var(--bar-pill-ink); }
+body[data-mode=capture] .modes button[aria-checked=true]:hover { background: #1D3B2F; color: var(--gold); }
+body:not([data-mode=fill]) .fill-only, body:not([data-mode=capture]) .capture-only { display: none; }
+.ctl input:disabled { background: var(--surface-2); color: var(--ink-soft); }
 .tpls { flex-basis: 100%; border-top: 1px solid var(--border); padding-top: 8px; }
 .tpls b { display: block; margin-bottom: 4px; font-size: .78rem; }
 #tpl-chips { display: flex; flex-wrap: wrap; gap: 4px 12px; }

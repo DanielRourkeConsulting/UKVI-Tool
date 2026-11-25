@@ -8,7 +8,7 @@ const src = path.join(__dirname, '..');
   const m = JSON.parse(fs.readFileSync(path.join(ext, 'manifest.json'), 'utf8')); m.host_permissions = ['http://localhost/*']; fs.writeFileSync(path.join(ext, 'manifest.json'), JSON.stringify(m));
   const server = http.createServer((q, r) => { r.setHeader('content-type', 'text/html'); r.end(fs.readFileSync(path.join(__dirname, 'form.html'))); }).listen(0);
   const url = 'http://localhost:' + server.address().port + '/apply/12345678/form';
-  const ctx = await chromium.launchPersistentContext(fs.mkdtempSync(path.join(os.tmpdir(), 'ukvi-p-')), { headless: false, args: ['--headless=new', '--disable-extensions-except=' + ext, '--load-extension=' + ext, '--no-sandbox'] });
+  const ctx = await chromium.launchPersistentContext(fs.mkdtempSync(path.join(os.tmpdir(), 'ukvi-p-')), { headless: false, executablePath: process.env.CHROMIUM_PATH || undefined, args: ['--headless=new', '--disable-extensions-except=' + ext, '--load-extension=' + ext, '--no-sandbox'] });
   let [sw] = ctx.serviceWorkers(); if (!sw) sw = await ctx.waitForEvent('serviceworker', { timeout: 15000 });
   const id = sw.url().split('/')[2];
   const U = require('../lib.js'); const db = U.defaultDb();
@@ -21,8 +21,17 @@ const src = path.join(__dirname, '..');
   const panel = await ctx.newPage(); panel.on('pageerror', (e) => errors.push(e.message)); panel.on('console', (x) => x.type() === 'error' && errors.push(x.text()));
   await panel.goto(`chrome-extension://${id}/sidepanel.html`);
   const refresh = async () => { await form.bringToFront(); await panel.evaluate(() => window.__ukviTest.refresh()); await panel.waitForTimeout(400); };
-  const rowsOf = () => panel.evaluate(() => [...document.querySelectorAll('.row')].map((r) => ({ lab: r.querySelector('.lab').textContent, chip: r.querySelector('.chip').textContent, val: r.querySelector('.ctl input').value, on: r.querySelector('input[type=checkbox]').checked })));
+  const rowsOf = () => panel.evaluate(() => [...document.querySelectorAll('.row')].map((r) => { const cb = r.querySelector('input[type=checkbox]'); return { lab: r.querySelector('.lab').textContent, chip: r.querySelector('.chip').textContent, val: r.querySelector('.ctl input').value, on: cb ? cb.checked : null }; }));
+  const modeIs = () => panel.evaluate(() => ({ mode: document.body.dataset.mode, fill: getComputedStyle(document.getElementById('btn-fill')).display !== 'none', remember: getComputedStyle(document.getElementById('btn-remember')).display !== 'none', bg: getComputedStyle(document.getElementById('list')).backgroundColor }));
   await refresh();
+  // Nothing captured yet, so the panel opens in Capture: no fill button, no tick boxes.
+  const cap = await modeIs();
+  assert.deepStrictEqual([cap.mode, cap.fill, cap.remember], ['capture', false, true]);
+  assert.ok((await rowsOf()).every((r) => r.on === null), 'no tick boxes in Capture');
+  await panel.click('#mode-fill'); await panel.waitForTimeout(300);
+  const fil = await modeIs();
+  assert.deepStrictEqual([fil.mode, fil.fill, fil.remember], ['fill', true, false]);
+  assert.notStrictEqual(cap.bg, fil.bg, 'each mode has its own background');
   let rows = await rowsOf(); console.log(rows.map((r) => JSON.stringify(r)).join('\n'));
   const get = (rs, s) => rs.find((r) => r.lab.startsWith(s));
   assert.ok(!rows.some((r) => /password/i.test(r.lab)), 'password/hidden skipped');
@@ -35,12 +44,16 @@ const src = path.join(__dirname, '..');
   assert.deepStrictEqual(v, { gn: 'Alex', fn: 'Sample', d: '23', m: '04', y: '1990', nat: 'Examplestan', ppn: 'P123', oisc: 'N123', re: 'adv@example.org', sw: 'true', dy: 'false', dn: 'true' });
   const st = () => sw.evaluate(() => chrome.storage.local.get('db')).then((x) => x.db);
   assert.ok(Object.keys((await st()).mappings).length >= 9, 'mappings persisted on fill');
-  // Learn a default.
-  await form.fill('#reason', 'Fee waiver – destitution');
-  await panel.evaluate(() => { const row = [...document.querySelectorAll('.row')].find((r) => r.querySelector('.lab').textContent.startsWith('Reason')); const sel = row.querySelector('.ctl select'); sel.value = 'default'; sel.dispatchEvent(new Event('change')); });
+  // Capture a default: text typed in the panel's box wins over what is on the page.
+  await panel.click('#mode-capture'); await panel.waitForTimeout(300);
+  await form.fill('#reason', 'typed on the page');
+  const reasonBox = panel.locator('.row', { hasText: 'Reason' }).locator('.ctl input');
+  await reasonBox.fill('Fee waiver – destitution');
+  assert.strictEqual(await panel.locator('.row', { hasText: 'Reason' }).locator('.ctl select').inputValue(), 'default', 'typing default text sets the source to Default');
   await panel.evaluate(() => document.getElementById('btn-remember').click()); await panel.waitForTimeout(600);
   const s2 = await st();
   assert.strictEqual(s2.defaults['reason for applying'][0].v, 'Fee waiver – destitution');
+  assert.strictEqual(s2.prefs.mode, 'capture', 'mode is remembered');
   assert.strictEqual(Object.keys(s2.templates).length, 1);
   const tpl = s2.caseTemplates.common.items; assert.ok(tpl.given_names && tpl.dob && tpl.passport_number, 'case items added to the case template');
   assert.ok(!tpl.oisc_number && !tpl.adviser_email, 'adviser data is not part of the client template');
@@ -52,7 +65,8 @@ const src = path.join(__dirname, '..');
   const s3 = await st();
   assert.ok(s3.caseTemplates.fee_waiver.items.given_names && s3.caseTemplates.common.items.given_names, 'saved to both selected templates');
   assert.deepStrictEqual(Object.values(s3.pageTemplates)[0], ['common', 'fee_waiver'], 'page remembers its templates');
-  // "Next page / next client": reload the form, panel follows by itself (no click on the icon).
+  // "Next page / next client": back in Fill, reload the form, panel follows by itself (no click on the icon).
+  await panel.click('#mode-fill'); await panel.waitForTimeout(300);
   await form.reload(); await panel.waitForTimeout(1200);
   rows = await rowsOf();
   assert.deepStrictEqual([get(rows, 'Reason').chip, get(rows, 'Reason').val, get(rows, 'Reason').on], ['default', 'Fee waiver – destitution', true]);
