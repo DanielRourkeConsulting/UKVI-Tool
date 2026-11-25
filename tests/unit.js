@@ -78,4 +78,32 @@ t('case templates: common + named, multi-select, migration', () => {
   const old = Object.assign(U.defaultDb(), { caseTemplate: { items: { x: { label: 'X', forms: {} } } } }); delete old.caseTemplates;
   U.ensureTemplates(old); assert.ok(old.caseTemplates.common.items.x && !old.caseTemplate);
 });
+t('form export: sections in step order, questions, formats and options, no client data', () => {
+  const db = U.defaultDb();
+  db.cases = { C1: { data: { given_names: 'Alexandra' } } }; db.currentCase = 'C1';
+  db.defaults = { reason: [{ v: 'Fee waiver – destitution', n: 1 }] };
+  db.tmplMappings = { pB: { name: 'case:given_names', reason: 'default' } };
+  const pages = [
+    ['pB', { title: 'Your details', caption: 'Section 1 of 2', section: { num: 2, name: 'Application' }, fields: [
+      { fp: 'name', label: 'Given names', kind: 'text', inputType: 'text' },
+      { fp: 'dd', label: 'Date of birth › Day', group: 'Date of birth', kind: 'text', part: 'day' },
+      { fp: 'mm', label: 'Date of birth › Month', group: 'Date of birth', kind: 'select', part: 'month', options: ['Select month', 'January', 'February'] },
+      { fp: 'yy', label: 'Date of birth › Year', group: 'Date of birth', kind: 'text', part: 'year' },
+      { fp: 'loc', label: 'Are you in the UK?', kind: 'radio', options: ['Yes', 'No'] },
+      { fp: 'reason', label: 'Reason <for> applying', kind: 'text', inputType: 'textarea' },
+      { fp: 'country', label: 'Which country are you in?', kind: 'text', showIf: { fp: 'loc', a: 'No' } }] }],
+    ['pA', { title: 'Register an email', section: { num: 1, name: 'Start' }, fields: [{ fp: 'email', label: 'Email address', kind: 'text', inputType: 'email' }] }]];
+  const h = U.formExport(db, 'Fee waiver – UKVI form', pages);
+  assert.ok(h.indexOf('Start') < h.indexOf('Application') && h.indexOf('Register an email') < h.indexOf('Your details'), 'sections in step order');
+  assert.strictEqual((h.match(/class="date"/g) || []).length, 1, 'Day / Month / Year asked as one date');
+  assert.ok(/Are you in the UK\?[\s\S]*type="radio" name="(q\d+)" value="Yes"[\s\S]*name="\1" value="No"/.test(h), 'radio options to choose from');
+  assert.ok(h.includes('<textarea') && h.includes('Reason &lt;for&gt; applying'), 'long answer box; text escaped');
+  const q = /name="(q\d+)" value="No"/.exec(h)[1];
+  assert.ok(new RegExp('value="No">No</label></div></fieldset><div class="cond" data-if="' + q + '" data-a="No">[\\s\\S]*Which country are you in\\?').test(h), 'follow-up sits under the answer that opens it');
+  assert.ok(h.indexOf('Which country') < h.indexOf('Reason &lt;for&gt;'), 'follow-up placed with its question, not at its field position');
+  assert.ok(h.includes('<script>') && h.includes("c.hidden=!ans(c)"), 'follow-ups open and close as answers change');
+  assert.ok(h.includes('Case: ') && h.includes('Default: Fee waiver – destitution'), 'source and default shown');
+  assert.ok(!h.includes('Alexandra'), 'no case values');
+  assert.ok(!h.includes('Select month'), 'prompt options left out');
+});
 console.log(n + ' tests passed');

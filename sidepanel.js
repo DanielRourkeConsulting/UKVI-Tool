@@ -67,10 +67,44 @@
     $('#list').append(box);
   }
 
+  // ---------- Every field seen on this page, follow-up questions included ----------
+  // A page's fields are the ones saved for it plus every one seen since it opened, in page order. A field that
+  // appears after an answer changed (pick "Yes", Rescan) is recorded as a follow-up opened by that answer; one that
+  // is hidden now stays listed (Capture only) so saving doesn't lose it.
+  let known = { tid: null, scanned: false, order: [], byFp: new Map(), cur: new Map() };
+  const fromSaved = (sf) => ({ id: null, kind: sf.kind, inputType: sf.inputType || '', group: sf.group || '', display: sf.label, fp: sf.fp, part: sf.part || '',
+    label: sf.label.includes(' › ') ? sf.label.slice(sf.label.lastIndexOf(' › ') + 3) : sf.label,
+    options: (sf.options || []).map((t) => ({ text: t })), cur: '', showIf: sf.showIf || null, hidden: true });
+  function mergeKnown(res, nt) {
+    if (known.tid !== nt) {
+      known = { tid: nt, scanned: false, order: [], byFp: new Map(), cur: new Map() };
+      ((db.templates[nt] || {}).fields || []).forEach((sf) => { known.order.push(sf.fp); known.byFp.set(sf.fp, fromSaved(sf)); });
+    }
+    const vis = res.fields;
+    const changed = known.scanned ? vis.filter((f) => (f.kind === 'radio' || f.kind === 'checkbox') && known.cur.has(f.fp) && known.cur.get(f.fp) !== f.cur && f.cur && f.cur !== 'no') : [];
+    vis.forEach((f, i) => {
+      const old = known.byFp.get(f.fp);
+      if (!old) {
+        if (!f.showIf && changed.length) {
+          const before = changed.filter((c) => vis.indexOf(c) < i);
+          const c = before.length ? before[before.length - 1] : changed[changed.length - 1];
+          f.showIf = { fp: c.fp, a: c.cur };
+        }
+        const prev = i ? known.order.indexOf(vis[i - 1].fp) : -1;
+        known.order.splice(prev + 1, 0, f.fp);
+      } else if (!f.showIf && old.showIf) f.showIf = old.showIf;
+      known.byFp.set(f.fp, f); known.cur.set(f.fp, f.cur);
+    });
+    known.scanned = true;
+    const here = new Map(vis.map((f) => [f.fp, f]));
+    return known.order.map((fp) => here.get(fp) || Object.assign({}, known.byFp.get(fp), { id: null, cur: '', hidden: true }));
+  }
+
   // ---------- Building rows ----------
   function buildRows(res) {
     heading = res.heading; caption = res.caption || ''; section = res.section || null;
     const nt = U.templateId(res.href, res.heading);
+    const fields = mergeKnown(res, nt);
     if (nt !== tid) overrides.clear();
     tid = nt;
     if (nt !== lastTid) { selTpl = new Set((db.pageTemplates[tid] || db.prefs.lastTemplates || ['common']).filter((id) => db.caseTemplates[id])); lastTid = nt; }
@@ -79,7 +113,7 @@
     // Fill follows one case template: case items outside it (and outside Common) aren't ticked.
     const ft = db.caseTemplates[db.prefs.fillTemplate];
     const inTpl = ft ? new Set(Object.keys(ft.items).concat(Object.keys(db.caseTemplates.common.items))) : null;
-    rows = res.fields.map((f) => {
+    rows = fields.map((f) => {
       const cur = f.cur;
       const r = { f, fp: f.fp, cur, origin: 'none', ref: 'none', value: '', include: false, status: '' };
       const ov = overrides.get(f.fp);
@@ -208,8 +242,8 @@
       else (p.fields || []).forEach((f) => {
         const ref = tm[f.fp] !== undefined ? tm[f.fp] : (db.mappings[f.fp] || 'none');
         const val = U.refValue(ref, db, f.fp);
-        fields.append(el('div', { class: 'pf' + (ref === 'none' ? ' skip' : '') },
-          el('span', { class: 'pf-lab', text: f.label }),
+        fields.append(el('div', { class: 'pf' + (ref === 'none' ? ' skip' : '') + (f.showIf ? ' follow' : '') },
+          el('span', { class: 'pf-lab' }, ifTag(f.showIf, p.fields), f.label),
           el('span', { class: 'pf-src', text: U.refLabel(ref, db) }),
           el('span', { class: 'pf-val', text: val || '—' })));
       });
@@ -236,13 +270,20 @@
     msg = 'Deleted “' + title + '”.'; render();
   }
 
+  // "↳ Yes": this question opens when that answer is given to the question named in its tooltip.
+  function ifTag(s, fields) {
+    if (!s) return null;
+    const q = (fields || rows.map((r) => ({ fp: r.fp, label: r.f.display }))).find((x) => x.fp === s.fp);
+    return el('span', { class: 'if', text: s.a, title: 'Opens when ' + (q ? '“' + q.label + '”' : 'the question above') + ' is answered “' + s.a + '”' });
+  }
   // The open page's fields: Fill rows (tick + value) or Capture rows (default text + source).
   function liveRows(list) {
     if (!rows.length) { list.append(el('div', { class: 'none', text: 'No fillable fields found on this page.' })); return; }
     const filter = db.prefs.filter || 'all'; // set on the options page
-    const vis = rows.filter((r) => filter === 'all' || (filter === 'ready' ? r.include : (r.origin === 'guess' || r.origin === 'none' || (r.value === '' && r.ref !== 'none'))));
     const capture = mode === 'capture';
-    vis.forEach((r) => {
+    // Follow-up questions that are hidden right now are listed in Capture (to set them up) but not in Fill.
+    const vis = rows.filter((r) => (capture || !r.f.hidden)).filter((r) => filter === 'all' || (filter === 'ready' ? r.include : (r.origin === 'guess' || r.origin === 'none' || (r.value === '' && r.ref !== 'none'))));
+    vis.forEach((r, ri) => {
       const cb = capture ? null : el('input', { type: 'checkbox', checked: r.include, 'aria-label': 'Fill this field' });
       if (cb) cb.addEventListener('change', () => { r.include = cb.checked; row.classList.toggle('off', !r.include); });
       // Capture: the box holds the default text for next time (case and adviser items show their value, locked).
@@ -252,7 +293,7 @@
         placeholder: capture ? (fromData ? '' : 'default text') : (r.f.kind === 'checkbox' ? 'yes / no' : 'value'),
         disabled: capture && fromData });
       inp.value = r.value;
-      const dlId = 'dl' + r.f.id;
+      const dlId = 'dl' + ri;
       if (r.f.options.length) inp.setAttribute('list', dlId);
       const out = !capture && r.outside;
       const chip = el('span', { class: 'chip ' + (out ? 'outside' : r.origin), text: out ? 'not in template' : chipText[r.origin] });
@@ -261,12 +302,12 @@
         r.value = inp.value; r.include = inp.value !== ''; if (cb) cb.checked = r.include; overrides.set(r.fp, { ref: r.ref, value: inp.value });
       });
       const sel = capture ? sourceSelect(r) : null;
-      const row = el('div', { class: 'row ' + (r.include || capture ? '' : 'off') + ' ' + (r.origin === 'guess' ? 'guess' : '') + ' ' + r.status },
-        el('div', { class: 'top' }, cb, el('div', { class: 'lab' }, r.f.label, r.f.group ? el('small', { text: r.f.group }) : null), chip),
+      const row = el('div', { class: 'row ' + (r.include || capture ? '' : 'off') + ' ' + (r.origin === 'guess' ? 'guess' : '') + ' ' + r.status + (r.f.showIf ? ' follow' : '') + (r.f.hidden ? ' unseen' : '') },
+        el('div', { class: 'top' }, cb, el('div', { class: 'lab' }, ifTag(r.f.showIf), r.f.label, r.f.group ? el('small', { text: r.f.group }) : null), chip),
         el('div', { class: 'ctl' }, inp, sel));
       if (r.f.options.length) { const dl = el('datalist', { id: dlId }); r.f.options.slice(0, 200).forEach((o) => dl.append(el('option', { value: o.text }))); row.append(dl); }
-      row.addEventListener('mouseenter', () => ask({ type: 'flash', id: r.f.id, on: true }).catch(() => {}));
-      row.addEventListener('mouseleave', () => ask({ type: 'flash', id: r.f.id, on: false }).catch(() => {}));
+      if (r.f.id != null) row.addEventListener('mouseenter', () => ask({ type: 'flash', id: r.f.id, on: true }).catch(() => {}));
+      if (r.f.id != null) row.addEventListener('mouseleave', () => ask({ type: 'flash', id: r.f.id, on: false }).catch(() => {}));
       list.append(row);
     });
   }
@@ -297,7 +338,7 @@
 
   // ---------- Buttons ----------
   async function doFill() {
-    const items = rows.filter((r) => r.include && r.value !== '').map((r) => ({ id: r.f.id, value: r.value }));
+    const items = rows.filter((r) => r.include && r.value !== '' && !r.f.hidden).map((r) => ({ id: r.f.id, value: r.value }));
     rows.forEach((r) => { r.status = ''; });
     let ok = 0, bad = 0;
     try {
@@ -306,6 +347,9 @@
     } catch (e) { msg = 'Couldn\'t reach the page: ' + e.message; render(); return; }
     db = await U.load(); await persistMappings();
     msg = 'Filled ' + ok + (bad ? ' · ' + bad + ' had no matching option (red)' : '') + '. Check every answer before you continue.';
+    // An answer just filled may have opened follow-up questions: read the page again so they show up to fill.
+    const opened = rows.some((r) => r.f.hidden && r.f.showIf && items.length);
+    if (opened) { const m = msg; await refresh(); const n = rows.filter((r) => r.f.showIf && !r.f.hidden).length; msg = m + (n ? ' Follow-up questions now open: ' + n + '.' : ''); }
     render();
   }
 
@@ -324,7 +368,7 @@
     }
     const before = db.templates[tid] || {};
     db.templates[tid] = { title: fresh.heading || heading, caption: fresh.caption || '', section: fresh.section || null, url: fresh.url, created: before.created || before.updated || Date.now(), updated: Date.now(),
-      fields: rows.map((r) => ({ fp: r.fp, label: r.f.display, kind: r.f.kind, part: r.f.part || '', options: r.f.options.slice(0, 40).map((o) => o.text) })) };
+      fields: rows.map((r) => ({ fp: r.fp, label: r.f.display, group: r.f.group || '', kind: r.f.kind, inputType: r.f.inputType || '', part: r.f.part || '', showIf: r.f.showIf || null, options: r.f.options.slice(0, 300).map((o) => o.text) })) };
     // Case-data items this page needs go into the common case template (adviser data and defaults are ours, not the client's).
     const chosen = [...selTpl].filter((id) => db.caseTemplates[id]);
     db.pageTemplates[tid] = chosen; db.prefs.lastTemplates = chosen;
@@ -370,6 +414,16 @@
   document.addEventListener('click', (e) => { if (armed && !e.target.closest('.bin')) { armed = ''; render(); } });
   $('#btn-edit').addEventListener('click', () => setEditing(!editing));
   $('#btn-done').addEventListener('click', () => setEditing(false));
+  // Export: the chosen template's pages as one read-only copy of the form (questions, formats, options), downloaded as HTML.
+  $('#btn-export').addEventListener('click', async () => {
+    db = await U.load();
+    const pages = savedPages(), ft = db.caseTemplates[db.prefs.fillTemplate];
+    if (!pages.length) return;
+    const title = (ft ? ft.name : 'All saved pages') + ' – UKVI form';
+    const a = el('a', { href: URL.createObjectURL(new Blob([U.formExport(db, title, pages)], { type: 'text/html' })), download: U.slug(title.replace(' – ', ' ')).replace(/_+/g, '-') + '.html' });
+    document.body.append(a); a.click(); a.remove();
+    msg = 'Exported ' + pages.length + ' page' + (pages.length === 1 ? '' : 's') + '.'; $('#status').textContent = msg;
+  });
   $('#btn-capture').addEventListener('click', () => setMode('capture'));
   $('#btn-cancel').addEventListener('click', cancelCapture);
   showMode();

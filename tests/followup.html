@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Application - Your sponsor</title>
+<style>[hidden], .govuk-radios__conditional--hidden { display: none; }</style></head>
+<body>
+<header><ol>
+  <li class="inactive"><a data-nav-position="1 of 4: ">Start</a></li>
+  <li class="current"><a data-nav-position="2 of 4: ">Application <span class="visuallyhidden"> - current step</span></a></li>
+  <li class="inactive"><a data-nav-position="3 of 4: ">Finance</a></li>
+</ol></header>
+<main><h1>Your sponsor</h1>
+<form>
+  <!-- Marked the GOV.UK way: the answer names the block it opens. -->
+  <fieldset><legend>Do you have a sponsor?</legend>
+    <input type="radio" id="sp-y" name="sponsor" value="yes" data-aria-controls="cond-sponsor"><label for="sp-y">Yes</label>
+    <div class="govuk-radios__conditional govuk-radios__conditional--hidden" id="cond-sponsor">
+      <label for="sp-name">Sponsor's full name</label><input type="text" id="sp-name" name="spName">
+    </div>
+    <input type="radio" id="sp-n" name="sponsor" value="no"><label for="sp-n">No</label>
+  </fieldset>
+  <!-- Not marked: a script shows the details box when Yes is picked. -->
+  <fieldset><legend>Have you been refused a visa?</legend>
+    <input type="radio" id="rf-y" name="refused" value="yes"><label for="rf-y">Yes</label>
+    <input type="radio" id="rf-n" name="refused" value="no"><label for="rf-n">No</label>
+  </fieldset>
+  <div id="refused-more" hidden><label for="rf-more">Give details of the refusal</label><textarea id="rf-more" name="rfMore"></textarea></div>
+  <label for="phone">Telephone number</label><input type="tel" id="phone" name="phone">
+</form></main>
+<script>
+  document.querySelectorAll('[name=refused]').forEach(function (r) { r.addEventListener('change', function () { document.getElementById('refused-more').hidden = document.getElementById('rf-y').checked ? false : true; }); });
+  document.querySelectorAll('[name=sponsor]').forEach(function (r) { r.addEventListener('change', function () { document.getElementById('cond-sponsor').classList.toggle('govuk-radios__conditional--hidden', !document.getElementById('sp-y').checked); }); });
+</script>
+</body></html>

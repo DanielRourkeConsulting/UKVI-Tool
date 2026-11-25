@@ -88,15 +88,26 @@
     return out;
   }
 
+  // Follow-up questions: an answer (radio or tick box) that names the block it reveals, as GOV.UK forms do
+  // (aria-controls / data-aria-controls / data-target). Fields in such a block are read even while it is hidden.
+  function revealBlocks() {
+    const blocks = new Map(); // block element -> the option element that opens it
+    document.querySelectorAll('input[type=radio],input[type=checkbox],[role=radio],[role=checkbox]').forEach((o) => {
+      const ids = o.getAttribute('aria-controls') || o.getAttribute('data-aria-controls') || o.getAttribute('data-target') || '';
+      ids.split(/\s+/).filter(Boolean).forEach((id) => { const b = document.getElementById(id.replace(/^#/, '')); if (b && !b.contains(o)) blocks.set(b, o); });
+    });
+    return blocks;
+  }
   function scan() {
     const out = [], seenRadio = new Set(), seenFp = {};
     const toggles = [], seenEl = new Set();
+    const blocks = revealBlocks(), inBlock = (el) => [...blocks.keys()].some((b) => b.contains(el));
     for (const el of document.querySelectorAll('input,select,textarea,' + TOGGLE_SEL)) {
       if (seenEl.has(el)) continue; seenEl.add(el);
       if (!/^(INPUT|SELECT|TEXTAREA)$/.test(el.tagName)) { if (el.getClientRects().length && !el.disabled && el.getAttribute('aria-disabled') !== 'true') toggles.push(el); continue; }
       const type = (el.type || '').toLowerCase();
       if (el.tagName === 'INPUT' && ['hidden', 'password', 'submit', 'button', 'reset', 'image', 'file', 'search', 'range', 'color'].includes(type)) continue;
-      if (el.disabled || el.readOnly || !shown(el)) continue;
+      if (el.disabled || el.readOnly || (!shown(el) && !inBlock(el))) continue;
       let f;
       if (type === 'radio') {
         const key = (el.form ? [...document.forms].indexOf(el.form) : -1) + '|' + el.name;
@@ -123,6 +134,15 @@
       let fp = U.norm(f.display);
       if (seenFp[fp]) { seenFp[fp]++; fp += ' #' + seenFp[fp]; } else seenFp[fp] = 1;
       f.fp = fp;
+    });
+    // Which answer opens each follow-up question (the innermost reveal block holding it), and whether it is hidden now.
+    const optOf = new Map();
+    out.forEach((f) => { if (f.kind === 'radio') f.options.forEach((o) => optOf.set(o.el, { fp: f.fp, a: o.text })); else if (f.kind === 'checkbox') optOf.set(f.el, { fp: f.fp, a: 'yes' }); });
+    out.forEach((f) => {
+      let best = null;
+      blocks.forEach((o, b) => { if (b.contains(f.el) && optOf.has(o) && optOf.get(o).fp !== f.fp && (!best || best.b.contains(b))) best = { b, s: optOf.get(o) }; });
+      if (best) f.showIf = best.s;
+      f.hidden = !shown(f.el);
     });
     return out;
   }
@@ -230,7 +250,7 @@
     return c ? txt(c).slice(0, 120) : '';
   };
   const describe = (f, id) => ({ id, kind: f.kind, inputType: f.inputType || '', label: f.label, group: f.group, part: f.part, display: f.display, fp: f.fp,
-    options: (f.options || []).map((o) => ({ text: o.text })), cur: current(f) });
+    options: (f.options || []).map((o) => ({ text: o.text })), cur: current(f), showIf: f.showIf || null, hidden: !!f.hidden });
 
   chrome.runtime.onMessage.addListener((m, sender, reply) => {
     if (sender.id !== chrome.runtime.id || !m || m.to !== 'agent') return;

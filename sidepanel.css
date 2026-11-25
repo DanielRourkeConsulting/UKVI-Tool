@@ -138,5 +138,13 @@ footer .ficon:hover { color: var(--ink); background: rgba(0,0,0,.06); }
 footer .ficon svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
 footer .ficon[aria-pressed=true] { background: #1D3B2F; color: var(--gold); }
 body:not([data-view=editor]) .editor-only { display: none; }
-body[data-view=editor] header > button:not(#btn-done), body[data-view=editor] .bar.tpls, body[data-view=editor] #case-sel { display: none; }
+body[data-view=editor] header > button:not(.editor-only), body[data-view=editor] .bar.tpls, body[data-view=editor] #case-sel { display: none; }
 body[data-view=editor] .bar.picks { display: flex; }
+header button.push { margin-left: auto; }
+/* Follow-up questions (opened by an answer): indented, with the answer that opens them. */
+.row.follow, .pf.follow { margin-left: 18px; }
+.row.follow { border-left: 3px solid var(--gold); }
+.pf.follow { padding-left: 10px; border-left: 3px solid var(--gold); }
+.row.unseen { opacity: .7; border-style: dashed; }
+.if { display: inline-block; margin-right: 6px; padding: 0 7px; border-radius: var(--r-pill); background: var(--placeholder-tint); color: var(--placeholder); font-size: .7rem; font-weight: 600; vertical-align: 1px; }
+.if::before { content: ""; display: inline-block; width: 6px; height: 6px; margin: 0 4px 0 0; border-left: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; border-bottom-left-radius: 2px; vertical-align: 2px; }

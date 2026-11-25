@@ -280,6 +280,105 @@
     const e = U.entries(db, kind).find((x) => x.key === key);
     return (kind === 'adviser' ? 'Adviser: ' : 'Case: ') + (e ? e.label : U.humanise(key));
   };
+  // ---- Form export: the saved pages of a template as one working copy of the form, in form order ----
+  // Sections in step order, pages in capture order, each question with real answer boxes and options to try out.
+  // A follow-up question sits under the answer that opens it and appears only when that answer is chosen.
+  // Shows where the tool's answer comes from and learned default text, but never case or adviser values.
+  U.formExport = (db, title, pages) => {
+    const esc = (s) => String(s == null ? '' : s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+    const prompt = /^\s*(-+\s*)?((please\s+)?(select|choose)\b.*|-+)\s*$/i;
+    const opts = (f) => (f.options || []).filter((o) => o && !prompt.test(o));
+    const groupOf = (f) => f.group != null && f.group !== '' ? f.group : (f.label.includes(' › ') ? f.label.slice(0, f.label.lastIndexOf(' › ')) : '');
+    const own = (f) => f.label.includes(' › ') ? f.label.slice(f.label.lastIndexOf(' › ') + 3) : f.label;
+    const shownLabel = (f, byFp) => { const par = f.showIf && byFp.get(f.showIf.fp); return par && groupOf(f) && U.norm(groupOf(f)) === U.norm(par.fs[0].label) ? own(f) : f.label; };
+    const isPart = (f) => ['day', 'month', 'year'].includes(f.part);
+    const source = (pid, f) => {
+      const tm = db.tmplMappings[pid] || {};
+      const ref = tm[f.fp] !== undefined ? tm[f.fp] : (db.mappings[f.fp] || 'none');
+      if (ref === 'none') return '';
+      if (ref === 'default') { const d = (db.defaults || {})[f.fp]; return d && d.length ? 'Default: ' + d[0].v : 'Default'; }
+      return U.refLabel(ref, db);
+    };
+    let qn = 0;
+    function page(pid, p) {
+      // Questions: one per field, Day / Month / Year runs joined into one date question.
+      const fs = p.fields || [], qs = [];
+      for (let i = 0; i < fs.length; i++) {
+        const run = [fs[i]];
+        if (isPart(fs[i])) while (i + 1 < fs.length && isPart(fs[i + 1]) && groupOf(fs[i + 1]) === groupOf(fs[i]) && !run.some((x) => x.part === fs[i + 1].part)) run.push(fs[++i]);
+        qs.push({ fs: run, name: 'q' + (++qn), kids: [] });
+      }
+      const byFp = new Map(); qs.forEach((q) => q.fs.forEach((f) => byFp.set(f.fp, q)));
+      const top = [];
+      qs.forEach((q) => { const s = q.fs[0].showIf, par = s && byFp.get(s.fp); if (par && par !== q) par.kids.push(q); else top.push(q); });
+      const tag = (f) => { const s = source(pid, f); return s ? '<span class="src">' + esc(s) + '</span>' : ''; };
+      function render(q) {
+        const f = q.fs[0], id = q.name;
+        let html;
+        if (q.fs.length > 1) {
+          html = '<fieldset class="q"><legend class="ql">' + esc(groupOf(f)) + tag(f) + '</legend><div class="date">' +
+            q.fs.map((p, k) => '<label><span>' + esc(own(p)) + '</span><input class="' + (p.part === 'year' ? 'yr' : 'dm') + '" name="' + id + '_' + k + '" inputmode="numeric"></label>').join('') + '</div></fieldset>';
+        } else if (f.kind === 'checkbox') {
+          html = '<div class="q"><label class="opt"><input type="checkbox" name="' + id + '" value="yes">' + esc(f.label) + tag(f) + '</label></div>';
+        } else if (f.kind === 'radio') {
+          html = '<fieldset class="q"><legend class="ql">' + esc(f.label) + tag(f) + '</legend><div class="opts">' +
+            opts(f).map((o) => '<label class="opt"><input type="radio" name="' + id + '" value="' + esc(o) + '">' + esc(o) + '</label>').join('') + '</div></fieldset>';
+        } else if (f.kind === 'select') {
+          const o = opts(f);
+          html = '<div class="q"><label class="ql" for="' + id + '">' + esc(f.label) + tag(f) + '</label><select id="' + id + '" name="' + id + '"><option value=""></option>' +
+            o.map((x) => '<option>' + esc(x) + '</option>').join('') + '</select>' + (o.length > 12 ? '<details class="all"><summary>' + o.length + ' options</summary><ul class="list cols">' + o.map((x) => '<li>' + esc(x) + '</li>').join('') + '</ul></details>' : '') + '</div>';
+        } else {
+          const t = f.inputType === 'textarea' ? '<textarea id="' + id + '" name="' + id + '" rows="4"></textarea>'
+            : '<input id="' + id + '" name="' + id + '" type="' + (/^(email|tel|number|date)$/.test(f.inputType || '') ? f.inputType + '" class="mid' : 'text') + '">';
+          html = '<div class="q"><label class="ql" for="' + id + '">' + esc(shownLabel(f, byFp)) + tag(f) + '</label>' + t + '</div>';
+        }
+        // Follow-ups: grouped by the answer that opens them, shown under this question.
+        const byAns = new Map(); q.kids.forEach((k) => { const a = k.fs[0].showIf.a; if (!byAns.has(a)) byAns.set(a, []); byAns.get(a).push(k); });
+        byAns.forEach((ks, a) => { html += '<div class="cond" data-if="' + id + '" data-a="' + esc(a) + '"><div class="when">' + esc(a) + '</div>' + ks.map(render).join('') + '</div>'; });
+        return html;
+      }
+      return top.map(render).join('');
+    }
+    const groups = new Map();
+    pages.forEach(([pid, p]) => { const k = p.section ? 'n' + p.section.num : 'none'; if (!groups.has(k)) groups.set(k, { sec: p.section || null, pages: [] }); groups.get(k).pages.push([pid, p]); });
+    const order = [...groups.values()].sort((a, b) => (a.sec ? a.sec.num : 999) - (b.sec ? b.sec.num : 999));
+    let n = 0;
+    const toc = order.map((g) => '<li><b>' + esc(g.sec ? g.sec.num + '. ' + g.sec.name : 'Other pages') + '</b><ol>' + g.pages.map(([, p]) => '<li><a href="#p' + (++n) + '">' + esc(p.title || 'Page') + '</a></li>').join('') + '</ol></li>').join('');
+    n = 0;
+    const body = order.map((g) => '<section><h2><span class="num">' + esc(g.sec ? g.sec.num : '·') + '</span>' + esc(g.sec ? g.sec.name : 'Other pages') + '</h2>' +
+      g.pages.map(([pid, p]) => '<article id="p' + (++n) + '">' + (p.caption ? '<div class="cap">' + esc(p.caption) + '</div>' : '') + '<h3>' + esc(p.title || 'Page') + '</h3>' + page(pid, p) + '</article>').join('') + '</section>').join('');
+    const css = `body{font:16px/1.45 system-ui,"Segoe UI",Arial,sans-serif;color:#0b0c0c;max-width:760px;margin:0 auto;padding:32px 20px 60px}
+h1{font-size:2rem;margin:0 0 4px}.sub{color:#505a5f;margin:0 0 24px}nav{border:1px solid #b1b4b6;padding:12px 20px;margin-bottom:32px}
+nav ol{margin:4px 0 10px;padding-left:22px}nav>ol{padding-left:0;list-style:none}a{color:#1d70b8}
+h2{font-size:1.5rem;margin:40px 0 16px;padding-bottom:8px;border-bottom:4px solid #1D3B2F;display:flex;gap:12px;align-items:center}
+.num{display:inline-grid;place-items:center;min-width:34px;height:34px;border-radius:6px;background:#1D3B2F;color:#E9A843;font-size:1.1rem}
+article{border-left:4px solid #E9A843;padding:4px 0 4px 18px;margin:0 0 28px}
+.cap{color:#505a5f}h3{font-size:1.35rem;margin:2px 0 14px}
+fieldset{border:0;padding:0;margin:0;min-width:0}.q{margin:0 0 22px;break-inside:avoid}.ql{display:block;font-weight:700;margin-bottom:6px;padding:0}
+.src{display:inline-block;margin-left:8px;font-weight:400;font-size:.8rem;color:#505a5f;background:#f3f2f1;border-radius:10px;padding:1px 8px;vertical-align:1px}
+input[type=text],input[type=email],input[type=tel],input[type=number],input[type=date],input:not([type]),select,textarea{font:inherit;border:2px solid #0b0c0c;padding:5px 6px;width:100%;max-width:440px;box-sizing:border-box}
+input.mid,select{max-width:300px}textarea{max-width:none}input.dm{width:56px}input.yr{width:84px}
+input:focus,select:focus,textarea:focus{outline:3px solid #E9A843;outline-offset:0}
+.date{display:flex;gap:16px}.date span{display:block;font-size:.9rem}
+.opts{display:grid;gap:8px}.opt{display:flex;gap:10px;align-items:center;cursor:pointer}
+.opt input{width:26px;height:26px;margin:0;accent-color:#1D3B2F;flex:none}
+.cond{margin:6px 0 18px 12px;padding:8px 0 2px 20px;border-left:4px solid #b1b4b6}
+.when{display:inline-block;margin-bottom:10px;font-size:.8rem;font-weight:700;color:#1D3B2F;background:#f8ede0;border-radius:10px;padding:1px 9px}
+.when::before{content:"";display:inline-block;width:8px;height:8px;margin:0 5px 0 1px;border-left:2px solid currentColor;border-bottom:2px solid currentColor;border-bottom-left-radius:3px;vertical-align:2px}
+.all{margin-top:6px;color:#505a5f;font-size:.9rem}.list{margin:6px 0 0;padding-left:20px}.list.cols{columns:3}
+.tools{display:flex;gap:10px;margin:0 0 20px}.tools button{font:inherit;font-weight:700;border:0;border-radius:4px;padding:6px 14px;background:#1D3B2F;color:#E9A843;cursor:pointer}
+.tools button+button{background:#f3f2f1;color:#0b0c0c}
+@media print{body{padding:0}.tools,nav{display:none}}`;
+    const js = `(function(){function ans(c){return[...document.getElementsByName(c.dataset.if)].some(function(i){return(i.type==='radio'||i.type==='checkbox')?i.checked&&i.value===c.dataset.a:i.value===c.dataset.a})}
+function upd(){document.querySelectorAll('.cond').forEach(function(c){c.hidden=!ans(c)})}
+document.addEventListener('change',upd);document.addEventListener('input',upd);
+document.getElementById('clear').addEventListener('click',function(){document.querySelectorAll('input,select,textarea').forEach(function(i){if(i.type==='radio'||i.type==='checkbox')i.checked=false;else i.value=''});upd()});
+document.getElementById('print').addEventListener('click',function(){window.print()});upd()})();`;
+    return '<!doctype html><html lang="en-GB"><head><meta charset="utf-8"><title>' + esc(title) + '</title><style>' + css + '</style></head><body>' +
+      '<h1>' + esc(title) + '</h1><p class="sub">' + pages.length + ' page' + (pages.length === 1 ? '' : 's') + ' · ' + new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }) + '</p>' +
+      '<div class="tools"><button id="print" type="button">Print</button><button id="clear" type="button">Clear answers</button></div>' +
+      '<nav><ol>' + toc + '</ol></nav><form onsubmit="return false">' + body + '</form><script>' + js + '<\/script></body></html>';
+  };
   U.addDefault = (db, fp, value) => {
     value = String(value || '').trim(); if (!value) return;
     const list = (db.defaults[fp] = db.defaults[fp] || []);

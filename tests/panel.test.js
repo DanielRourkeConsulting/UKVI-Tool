@@ -6,7 +6,7 @@ const src = path.join(__dirname, '..');
   const ext = fs.mkdtempSync(path.join(os.tmpdir(), 'ukvi-ext-'));
   fs.cpSync(src, ext, { recursive: true, filter: (f) => !/node_modules|\.git(\/|$)|tests/.test(f) });
   const m = JSON.parse(fs.readFileSync(path.join(ext, 'manifest.json'), 'utf8')); m.host_permissions = ['http://localhost/*']; fs.writeFileSync(path.join(ext, 'manifest.json'), JSON.stringify(m));
-  const server = http.createServer((q, r) => { r.setHeader('content-type', 'text/html'); r.end(fs.readFileSync(path.join(__dirname, /ukvi-step/.test(q.url) ? 'ukvi-step.html' : 'form.html'))); }).listen(0);
+  const server = http.createServer((q, r) => { r.setHeader('content-type', 'text/html'); r.end(fs.readFileSync(path.join(__dirname, /ukvi-step/.test(q.url) ? 'ukvi-step.html' : /followup/.test(q.url) ? 'followup.html' : 'form.html'))); }).listen(0);
   const url = 'http://localhost:' + server.address().port + '/apply/12345678/form';
   const ctx = await chromium.launchPersistentContext(fs.mkdtempSync(path.join(os.tmpdir(), 'ukvi-p-')), { headless: false, executablePath: process.env.CHROMIUM_PATH || undefined, args: ['--headless=new', '--disable-extensions-except=' + ext, '--load-extension=' + ext, '--no-sandbox'] });
   let [sw] = ctx.serviceWorkers(); if (!sw) sw = await ctx.waitForEvent('serviceworker', { timeout: 15000 });
@@ -115,6 +115,13 @@ const src = path.join(__dirname, '..');
   // The template editor (icon beside settings) has the bins.
   await panel.click('#btn-edit'); await panel.waitForTimeout(300);
   assert.ok(await panel.locator('details.page .pf', { hasText: 'Reason' }).count(), 'the editor lists the fields of each page');
+  // Export: the whole form as one read-only HTML page.
+  const [dl] = await Promise.all([panel.waitForEvent('download'), panel.click('#btn-export')]);
+  const exported = fs.readFileSync(await dl.path(), 'utf8');
+  assert.match(dl.suggestedFilename(), /^all-saved-pages-ukvi-form\.html$/);
+  assert.ok(/Application[\s\S]*Applicant details[\s\S]*Reason for applying/.test(exported), 'export has the section, page and questions');
+  assert.ok(exported.includes('class="date"') && exported.includes('type="radio"'), 'date and option formats shown');
+  if (process.env.EXPORT_OUT) fs.copyFileSync(await dl.path(), process.env.EXPORT_OUT);
   await panel.locator('details.page summary').click(); await panel.waitForTimeout(100);
   assert.ok(!(await panel.locator('details.page').evaluate((d) => d.open)), 'collapses');
   await panel.locator('details.page summary').click();
@@ -148,6 +155,50 @@ const src = path.join(__dirname, '..');
   await refresh();
   const ready = await panel.locator('.row').count();
   assert.ok(ready < all, 'Ready to fill hides fields not ready (' + ready + ' of ' + all + ')');
+  await sw.evaluate(async () => { const { db } = await chrome.storage.local.get('db'); db.prefs.filter = 'all'; await chrome.storage.local.set({ db }); });
+
+  // Follow-up questions. A new page opens in Capture.
+  const rowOf = (s) => panel.locator('.row').filter({ has: panel.locator('.lab', { hasText: s }) });
+  await form.goto(url.replace('/form', '/followup')); await refresh();
+  assert.strictEqual((await modeIs()).mode, 'capture');
+  // Marked the GOV.UK way: read while still hidden, listed under its answer.
+  assert.strictEqual(await rowOf('full name').count(), 1, 'hidden follow-up read from the page');
+  assert.ok(await rowOf('full name').evaluate((r) => r.classList.contains('follow') && r.classList.contains('unseen')));
+  assert.strictEqual((await rowOf('full name').locator('.if').innerText()).trim(), 'Yes');
+  // Not marked: picking Yes and Rescan finds the new question and records which answer opened it.
+  assert.strictEqual(await rowOf('Give details').count(), 0);
+  await form.check('#rf-y'); await form.bringToFront(); await panel.click('#btn-rescan'); await panel.waitForTimeout(500);
+  assert.strictEqual(await rowOf('Give details').count(), 1, 'question opened by an answer appears');
+  assert.strictEqual((await rowOf('Give details').locator('.if').innerText()).trim(), 'Yes');
+  assert.ok((await rowOf('Give details').locator('.if').getAttribute('title')).includes('Have you been refused a visa?'));
+  // Back to No: the question hides on the page but stays listed in Capture, so saving keeps it.
+  await form.check('#rf-n'); await form.bringToFront(); await panel.click('#btn-rescan'); await panel.waitForTimeout(500);
+  assert.ok(await rowOf('Give details').evaluate((r) => r.classList.contains('unseen')), 'kept while hidden');
+  if (process.env.SHOT_DIR) { await panel.setViewportSize({ width: 380, height: 760 }); await rowOf('Do you have a sponsor').first().scrollIntoViewIfNeeded(); await panel.screenshot({ path: path.join(process.env.SHOT_DIR, 'capture-followups.png') }); }
+  const order = await panel.locator('details.page.here .row .lab').allInnerTexts();
+  assert.ok(order.findIndex((t) => /Give details/.test(t)) === order.findIndex((t) => /refused a visa/.test(t)) + 1, 'listed right after its question');
+  await panel.evaluate(() => document.getElementById('btn-remember').click()); await panel.waitForTimeout(600);
+  const fu = Object.values((await st()).templates).find((p) => p.title === 'Your sponsor');
+  const showIf = (s) => fu.fields.find((f) => f.label.includes(s)).showIf;
+  assert.strictEqual(showIf('full name').a, 'Yes'); assert.strictEqual(showIf('Give details').a, 'Yes');
+  assert.ok(/sponsor/.test(showIf('full name').fp) && /refused/.test(showIf('Give details').fp), 'saved with the question that opens them');
+  // Fill shows only questions open on the page.
+  assert.strictEqual((await modeIs()).mode, 'fill');
+  assert.strictEqual(await rowOf('Give details').count(), 0, 'hidden follow-up not offered in Fill');
+  // Export: a working copy; the follow-up opens when its answer is chosen.
+  await panel.click('#btn-edit'); await panel.waitForTimeout(300);
+  assert.ok(await panel.locator('details.page.here .pf.follow', { hasText: 'Give details' }).count(), 'editor marks follow-ups');
+  const [dl2] = await Promise.all([panel.waitForEvent('download'), panel.click('#btn-export')]);
+  const xpFile = path.join(os.tmpdir(), 'ukvi-export-test.html'); fs.copyFileSync(await dl2.path(), xpFile);
+  const xp = await ctx.newPage(); await xp.goto('file:///' + xpFile.replace(/\\/g, '/'));
+  const det = xp.locator('label', { hasText: 'Give details' });
+  assert.ok(!(await det.isVisible()), 'follow-up closed at first');
+  await xp.locator('fieldset', { hasText: 'Have you been refused a visa?' }).locator('label', { hasText: 'Yes' }).click();
+  assert.ok(await det.isVisible(), 'opens when Yes is chosen');
+  await xp.locator('fieldset', { hasText: 'Have you been refused a visa?' }).locator('label', { hasText: 'No' }).click();
+  assert.ok(!(await det.isVisible()), 'closes again on No');
+  if (process.env.EXPORT_OUT) fs.copyFileSync(await dl2.path(), process.env.EXPORT_OUT);
+  await xp.close(); await panel.click('#btn-done');
   assert.deepStrictEqual(errors, [], errors.join('; '));
   console.log('side panel test passed'); await ctx.close(); server.close();
 })().catch((e) => { console.error(e); process.exit(1); });
