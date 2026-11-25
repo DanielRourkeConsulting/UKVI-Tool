@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- A form page with ticked fields, in the DRC palette (green, cream, gold) -->
+  <defs>
+    <!-- Brush-stroke tick: short rounded arm, long tapering arm that sweeps up out of the box -->
+    <path id="tick" d="M1.2 8.4 Q2.6 7.4 4 8.4 L6.4 10.9 Q9.8 4.6 16.2 0.4 Q11.2 5.6 7.4 14 Q6.6 15.6 5.4 14.6 Q3.2 11.6 1.2 8.4 Z" fill="#1D3B2F"/>
+  </defs>
+  <rect width="64" height="64" rx="12" fill="#1D3B2F"/>
+  <rect x="12" y="7" width="40" height="50" rx="5" fill="#f8ede0"/>
+  <rect x="18" y="15" width="13" height="13" rx="3" fill="#E9A843"/>
+  <use href="#tick" transform="translate(17.5,10.5)"/>
+  <rect x="36" y="19.5" width="10" height="4" rx="2" fill="#1D3B2F"/>
+  <rect x="18" y="36" width="13" height="13" rx="3" fill="#E9A843"/>
+  <use href="#tick" transform="translate(17.5,31.5)"/>
+  <rect x="36" y="40.5" width="10" height="4" rx="2" fill="#1D3B2F"/>
+</svg>
