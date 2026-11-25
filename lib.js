@@ -322,6 +322,14 @@
     });
     return added;
   };
+  // Take one page out of one case template (the page stays saved for its other templates).
+  U.removeFormFromTemplate = (db, templateId, pageId) => {
+    const t = db.caseTemplates[templateId];
+    if (t) Object.entries(t.items).forEach(([k, it]) => { delete it.forms[pageId]; if (!Object.keys(it.forms).length && !it.manual) delete t.items[k]; });
+    if (db.pageTemplates[pageId]) db.pageTemplates[pageId] = db.pageTemplates[pageId].filter((x) => x !== templateId);
+  };
+  // Forget a saved page everywhere: its layout, its field links and its place in every template.
+  U.forgetPage = (db, pageId) => { delete db.templates[pageId]; delete db.tmplMappings[pageId]; U.removeFormFromTemplates(db, pageId); };
   U.removeFormFromTemplates = (db, pageId) => {
     Object.values(db.caseTemplates).forEach((t) => Object.entries(t.items).forEach(([k, it]) => {
       delete it.forms[pageId]; if (!Object.keys(it.forms).length && !it.manual) delete t.items[k];

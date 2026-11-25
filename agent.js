@@ -194,6 +194,32 @@
   // ---------- Talking to the side panel ----------
   let fields = [];
   const pageHeading = () => { const h = document.querySelector('h1'); return h ? txt(h) : document.title; };
+  // The section the page belongs to, from the numbered step bar at the top of UKVI forms
+  // ("1. Start  2. Application  3. Finance ..."): the step that is marked current, or failing that, the bold one.
+  const stepRe = /^\s*\d{1,2}\s*[.):]?\s+\S/;
+  const curClass = /(^|[\s_-])(active|current|selected)($|[\s_-])/i; // not "inactive"
+  const marked = (e) => (e.hasAttribute('aria-current') && e.getAttribute('aria-current') !== 'false') || e.getAttribute('aria-selected') === 'true' || curClass.test(e.className && e.className.baseVal !== undefined ? e.className.baseVal : e.className || '');
+  const isCurrent = (li) => marked(li) || [...li.querySelectorAll('*')].some(marked);
+  function pageSection() {
+    const lists = [...document.querySelectorAll('ol, ul, [role=tablist]')].filter((l) => l.getClientRects().length);
+    for (const l of lists) {
+      const items = [...l.children].filter((c) => c.getClientRects().length);
+      if (items.length < 3 || items.filter((c) => stepRe.test(txt(c))).length < items.length * 0.6) continue;
+      let cur = items.find(isCurrent);
+      if (!cur) {
+        const w = items.map((c) => { const a = c.querySelector('a, span, button') || c; return parseInt(getComputedStyle(a).fontWeight, 10) || 400; });
+        const max = Math.max(...w);
+        if (w.filter((x) => x === max).length === 1 && max > Math.min(...w)) cur = items[w.indexOf(max)];
+      }
+      if (cur) { const t = txt(cur), m = t.match(/^\s*(\d{1,2})\s*[.):]?\s+(.*)$/); return m ? { num: +m[1], name: m[2].slice(0, 80) } : null; }
+    }
+    return null;
+  }
+  // The small section caption GOV.UK pages show above the heading (e.g. "Section 2 of 6: Your details").
+  const pageCaption = () => {
+    const c = document.querySelector('.govuk-caption-xl, .govuk-caption-l, .govuk-caption-m');
+    return c ? txt(c).slice(0, 120) : '';
+  };
   const describe = (f, id) => ({ id, kind: f.kind, inputType: f.inputType || '', label: f.label, group: f.group, part: f.part, display: f.display, fp: f.fp,
     options: (f.options || []).map((o) => ({ text: o.text })), cur: current(f) });
 
@@ -201,7 +227,7 @@
     if (sender.id !== chrome.runtime.id || !m || m.to !== 'agent') return;
     if (m.type === 'scan') {
       fields = scan();
-      reply({ url: location.origin + location.pathname, href: location.href, heading: pageHeading(), fields: fields.map(describe) });
+      reply({ url: location.origin + location.pathname, href: location.href, heading: pageHeading(), caption: pageCaption(), section: pageSection(), fields: fields.map(describe) });
     } else if (m.type === 'apply') {
       (async () => {
         const out = [];

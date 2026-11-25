@@ -14,15 +14,15 @@
     <button id="mode-fill" role="radio" data-mode="fill" title="Fill: put saved answers into this form">Fill</button>
   </div>
   <button id="btn-opts" title="Data settings">⚙</button></header>
-<div class="bar"><span>Case:</span><select id="case-sel"></select></div>
-<div class="bar fill-only"><span>Template:</span><select id="fill-tpl"></select></div>
-<div class="sum"><span id="summary"></span><select id="filter"><option value="all">Show all</option><option value="ready">Ready to fill</option><option value="attention">Needs attention</option></select></div>
+<div class="bar fill-only"><span>Case:</span><select id="case-sel"></select></div>
+<div class="bar tpl-bar"><span>Template:</span><select id="fill-tpl"></select></div>
+<div class="sum"><div class="views" role="radiogroup" aria-label="View"><button role="radio" data-view="page" id="view-page">This page</button><button role="radio" data-view="saved" id="view-saved">Saved pages</button></div><span id="summary"></span><select id="filter" class="page-only"><option value="all">Show all</option><option value="ready">Ready to fill</option><option value="attention">Needs attention</option></select></div>
 <div id="list" class="list"></div>
 <footer>
-  <button id="btn-fill" class="p fill-only">Fill ticked fields</button>
-  <button id="btn-remember" class="p capture-only" title="Save the layout, your field choices and the default text for each field">Remember this page</button>
-  <button id="btn-rescan" class="s">Rescan</button>
-  <div class="tpls capture-only"><b>Save its case items to:</b><div id="tpl-chips"></div><div class="tpl-new"><input type="text" id="tpl-new-name" placeholder="New template name" aria-label="New template name"><button id="btn-tpl-new" class="s">Add</button></div></div>
+  <button id="btn-fill" class="p fill-only page-only">Fill ticked fields</button>
+  <button id="btn-remember" class="p capture-only page-only" title="Save the layout, your field choices and the default text for each field">Remember this page</button>
+  <button id="btn-rescan" class="s page-only">Rescan</button>
+  <div class="tpls capture-only page-only"><b>Save its case items to:</b><div id="tpl-chips"></div><div class="tpl-new"><input type="text" id="tpl-new-name" placeholder="New template name" aria-label="New template name"><button id="btn-tpl-new" class="s">Add</button></div></div>
   <div id="status" class="status"></div>
 </footer>
 <script src="lib.js"></script>

@@ -6,7 +6,14 @@
   const $ = (s) => document.querySelector(s);
   let selTpl = new Set(['common']), db, tab = null, rows = [], overrides = new Map(), filter = 'all', tid = '', heading = '', msg = '', originPattern = '', timer = null;
   // Two modes: 'capture' (learn this form's layout and the default text for each field) and 'fill' (put answers in).
-  let mode = '';
+  let mode = '', caption = '', section = null;
+  const sectionText = (s) => (s ? s.num + '. ' + s.name : '');
+  // Two views: 'page' (the fields on the open page) and 'saved' (every saved page of the template, in capture order).
+  let view = 'page', armed = '', openPages = new Set();
+  function showView() {
+    document.body.dataset.view = view;
+    document.querySelectorAll('.views button').forEach((b) => b.setAttribute('aria-checked', String(b.dataset.view === view)));
+  }
 
   // ---------- Mode ----------
   function showMode() {
@@ -18,7 +25,16 @@
     mode = m; msg = ''; showMode();
     const d = await U.load(); d.prefs.mode = m; await U.save(d);
     if (db) db.prefs.mode = m;
-    if (rows.length) render();
+    if (rows.length || view === 'saved') render();
+  }
+  function setView(v) {
+    if (v === view) return;
+    view = v; armed = ''; msg = '';
+    if (v === 'saved') {
+      const here = (db && db.templates[tid]) || {};
+      openPages = new Set(tid ? [tid, 'sec:' + secKey(here.section || section)] : []);
+    }
+    showView(); if (db) render();
   }
 
   const el = (tag, props, ...kids) => {
@@ -54,7 +70,7 @@
 
   // ---------- Building rows ----------
   function buildRows(res) {
-    heading = res.heading;
+    heading = res.heading; caption = res.caption || ''; section = res.section || null;
     const nt = U.templateId(res.href, res.heading);
     if (nt !== tid) overrides.clear();
     tid = nt;
@@ -134,11 +150,91 @@
     return s;
   }
 
+  // ---------- Saved pages: form sections (from the step bar), each holding its pages in capture order ----------
+  function savedPages() {
+    const ft = db.prefs.fillTemplate;
+    return Object.entries(db.templates)
+      .filter(([pid]) => !ft || (db.pageTemplates[pid] || []).includes(ft))
+      .sort((a, b) => (a[1].created || a[1].updated || 0) - (b[1].created || b[1].updated || 0));
+  }
+  function renderSaved() {
+    const list = $('#list'); list.textContent = '';
+    renderTpls();
+    const pages = savedPages();
+    $('#summary').textContent = pages.length + ' page' + (pages.length === 1 ? '' : 's');
+    $('#status').textContent = msg;
+    if (!pages.length) { list.append(el('div', { class: 'empty', text: 'No pages saved yet.' })); return; }
+    // Group the pages by form section (from the step bar), sections in step order, pages in capture order.
+    const groups = new Map();
+    pages.forEach(([pid, p]) => {
+      const k = secKey(p.section);
+      if (!groups.has(k)) groups.set(k, { sec: p.section || null, pages: [] });
+      groups.get(k).pages.push([pid, p]);
+    });
+    const order = [...groups.entries()].sort((a, b) => (a[1].sec ? a[1].sec.num : 999) - (b[1].sec ? b[1].sec.num : 999));
+    if (order.length === 1 && !order[0][1].sec) { order[0][1].pages.forEach(([pid, p], i) => list.append(pageBox(pid, p, i))); return; }
+    order.forEach(([k, g]) => {
+      const here = g.pages.some(([pid]) => pid === tid), ok = 'sec:' + k;
+      const del = armButton(ok, 'Delete section', async () => { db = await U.load(); g.pages.forEach(([pid]) => removePage(pid)); await afterDelete(g.pages.map(([pid]) => pid), g.sec ? sectionText(g.sec) : 'Other pages'); });
+      const d = el('details', { class: 'section' + (here ? ' here' : ''), open: openPages.has(ok) },
+        el('summary', {}, el('span', { class: 'pnum', text: g.sec ? String(g.sec.num) : '·' }),
+          el('span', { class: 'ptitle', text: g.sec ? g.sec.name : 'Other pages' }),
+          el('span', { class: 'pcount', text: g.pages.length + ' page' + (g.pages.length === 1 ? '' : 's') })),
+        el('div', { class: 'spages' }, g.pages.map(([pid, p], i) => pageBox(pid, p, i))),
+        el('div', { class: 'pdel' }, del));
+      d.addEventListener('toggle', () => { d.open ? openPages.add(ok) : openPages.delete(ok); });
+      list.append(d);
+    });
+  }
+  // Sections are matched by step number (the step's wording can change, e.g. a "Completed" tag).
+  const secKey = (s) => (s ? 'n' + s.num : 'none');
+  // A Delete button that needs a second click ("Confirm delete") to act.
+  function armButton(key, label, act) {
+    const b = el('button', { class: 'danger' + (armed === key ? ' armed' : ''), text: armed === key ? 'Confirm delete' : label });
+    b.addEventListener('click', async (e) => { e.preventDefault(); e.stopPropagation(); if (armed !== key) { armed = key; renderSaved(); return; } armed = ''; await act(); });
+    return b;
+  }
+  function pageBox(pid, p, i) {
+      const tm = db.tmplMappings[pid] || {};
+      const fields = el('div', { class: 'pfields' });
+      (p.fields || []).forEach((f) => {
+        const ref = tm[f.fp] !== undefined ? tm[f.fp] : (db.mappings[f.fp] || 'none');
+        const val = U.refValue(ref, db, f.fp);
+        fields.append(el('div', { class: 'pf' + (ref === 'none' ? ' skip' : '') },
+          el('span', { class: 'pf-lab', text: f.label }),
+          el('span', { class: 'pf-src', text: U.refLabel(ref, db) }),
+          el('span', { class: 'pf-val', text: val || '—' })));
+      });
+      const del = armButton(pid, 'Delete page', async () => { db = await U.load(); const t = (db.templates[pid] || {}).title || pid; removePage(pid); await afterDelete([pid], t); });
+      const d = el('details', { class: 'page' + (pid === tid ? ' here' : ''), open: openPages.has(pid) },
+        el('summary', {}, el('span', { class: 'pnum', text: String(i + 1) }),
+          el('span', { class: 'ptitle' }, p.title || pid, p.caption ? el('small', { text: p.caption }) : null),
+          el('span', { class: 'pcount', text: String((p.fields || []).length) })),
+        fields, el('div', { class: 'pdel' }, del));
+      d.addEventListener('toggle', () => { d.open ? openPages.add(pid) : openPages.delete(pid); if (!d.open && armed === pid) { armed = ''; renderSaved(); } });
+      return d;
+  }
+  // With a template chosen, Delete takes the page out of that template (it is forgotten once no template uses it);
+  // with "any", the page is forgotten everywhere. Works on the db just loaded; afterDelete saves.
+  function removePage(pid) {
+    const ft = db.prefs.fillTemplate;
+    if (ft && (db.pageTemplates[pid] || []).filter((x) => x !== ft).length) U.removeFormFromTemplate(db, ft, pid);
+    else U.forgetPage(db, pid);
+  }
+  async function afterDelete(pids, title) {
+    await U.save(db);
+    if (pids.includes(tid)) { lastTid = ''; overrides.clear(); if (lastScan) buildRows(lastScan); }
+    msg = 'Deleted “' + title + '”.'; renderSaved();
+  }
+
   function render() {
+    if (view === 'saved') return renderSaved();
     const list = $('#list'); list.textContent = '';
     const ready = rows.filter((r) => r.include).length;
     renderTpls();
-    $('#summary').textContent = rows.length + ' fields' + (mode === 'fill' ? ' · ' + ready + ' ready' : '');
+    $('#summary').textContent = mode === 'fill' ? ready + '/' + rows.length + ' ready' : rows.length + ' fields';
+    const over = [sectionText(section), caption].filter(Boolean).join(' · ');
+    if (heading) list.append(el('div', { class: 'pagehead' }, over ? el('small', { text: over }) : null, heading));
     if (!rows.length) { list.append(el('div', { class: 'empty', text: 'No fillable fields found on this page.' })); $('#status').textContent = msg; return; }
     const vis = rows.filter((r) => filter === 'all' || (filter === 'ready' ? r.include : (r.origin === 'guess' || r.origin === 'none' || (r.value === '' && r.ref !== 'none'))));
     const capture = mode === 'capture';
@@ -219,7 +315,8 @@
       // The default text in the panel's box wins; an empty box takes what is typed on the page.
       if (r.ref === 'default') { const typed = r.value || curByFp[r.fp]; if (typed && typed !== 'no') { U.addDefault(db, r.fp, typed); learned++; } }
     }
-    db.templates[tid] = { title: heading, url: fresh.url, updated: Date.now(),
+    const before = db.templates[tid] || {};
+    db.templates[tid] = { title: fresh.heading || heading, caption: fresh.caption || '', section: fresh.section || null, url: fresh.url, created: before.created || before.updated || Date.now(), updated: Date.now(),
       fields: rows.map((r) => ({ fp: r.fp, label: r.f.display, kind: r.f.kind, part: r.f.part || '', options: r.f.options.slice(0, 40).map((o) => o.text) })) };
     // Case-data items this page needs go into the common case template (adviser data and defaults are ours, not the client's).
     let tplMsg = '';
@@ -240,15 +337,36 @@
     const id = U.newTemplate(db, inp.value); if (!id) return;
     await U.save(db); selTpl.add(id); inp.value = ''; renderTpls();
   });
-  $('#btn-rescan').addEventListener('click', refresh);
+  // Rescan in Capture: whatever the adviser has typed on the page becomes that field's default text
+  // (not for case or adviser items: client data is never a default). Remember this page saves it.
+  function adoptPageValues() {
+    let n = 0;
+    for (const r of rows) {
+      if (r.ref.startsWith('case:') || r.ref.startsWith('adviser:')) continue;
+      const v = r.cur;
+      if (!v || (r.f.kind === 'checkbox' && v === 'no') || (r.ref === 'default' && v === r.value)) continue;
+      r.ref = 'default'; r.origin = 'edited'; r.value = v; r.include = true;
+      overrides.set(r.fp, { ref: 'default', value: v }); n++;
+    }
+    return n;
+  }
+  $('#btn-rescan').addEventListener('click', async () => {
+    await refresh();
+    if (mode !== 'capture' || !rows.length) return;
+    const n = adoptPageValues();
+    msg = n ? n + ' default' + (n === 1 ? '' : 's') + ' taken from the page.' : '';
+    render();
+  });
   document.querySelectorAll('.modes button').forEach((b) => b.addEventListener('click', () => setMode(b.dataset.mode)));
+  document.querySelectorAll('.views button').forEach((b) => b.addEventListener('click', () => setView(b.dataset.view)));
+  showView();
   $('#btn-opts').addEventListener('click', () => chrome.runtime.openOptionsPage());
   $('#filter').addEventListener('change', (e) => { filter = e.target.value; render(); });
   // The template being followed is kept until the adviser picks another.
   $('#fill-tpl').addEventListener('change', async (e) => {
     const d = await U.load(); d.prefs.fillTemplate = e.target.value; await U.save(d);
     db.prefs.fillTemplate = e.target.value;
-    if (lastScan) { buildRows(lastScan); render(); }
+    armed = ''; if (lastScan) buildRows(lastScan); if (lastScan || view === 'saved') render();
   });
   $('#case-sel').addEventListener('change', async (e) => { db.currentCase = e.target.value || null; await U.save(db); refresh(); });
 

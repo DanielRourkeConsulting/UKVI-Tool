@@ -1,4 +1,8 @@
 <!doctype html><html><head><title>Test form</title></head><body>
+<!-- Step bar like the UKVI forms: the current step is only shown in bold -->
+<style>.steps{list-style:none;display:flex;gap:16px}.steps a{font-weight:400}.steps li:nth-child(2) a{font-weight:700}</style>
+<nav><ol class="steps"><li><a href="#">1. Start</a></li><li><a href="#">2. Application</a></li><li><a href="#">3. Finance</a></li><li><a href="#">4. Documents</a></li></ol></nav>
+<span class="govuk-caption-l">Section 1 of 3</span>
 <h1>Applicant details</h1>
 <form>
 <div><label for="gn">First name</label><input id="gn" name="gn"></div>
