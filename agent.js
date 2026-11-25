@@ -216,7 +216,7 @@
       const f = fields[m.id];
       if (f) {
         const t = f.el;
-        if (m.on) { t.__ukviOutline = t.style.outline; t.style.outline = '3px solid #f47738'; t.scrollIntoView({ block: 'center', behavior: 'smooth' }); }
+        if (m.on) { t.__ukviOutline = t.style.outline; t.style.outline = '3px solid #E9A843'; t.scrollIntoView({ block: 'center', behavior: 'smooth' }); }
         else t.style.outline = t.__ukviOutline || '';
       }
       reply(true);

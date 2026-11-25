@@ -1,0 +1,45 @@
+/* Shared look: same palette as the Hours Ledger, FeeWaiver and rourkeconsulting.co.uk
+   (white page, warm cream panels, tan hairlines, deep forest green, warm gold accent).
+   Uses the Poppins typeface if it is installed, otherwise the system font; nothing is loaded from the internet. */
+:root {
+  --ink: #284F3F; --ink-soft: #587364; --paper: #FFFFFF; --page: #F3EDE2; --surface: #FFFFFF; --surface-2: #F5EEE0;
+  --border: #E6D6B8; --accent: #284F3F; --accent-strong: #1D3B2F; --accent-tint: #FAECD2; --on-accent: #FEFAF6;
+  --gold: #E9A843; --good: #3E7C43; --good-tint: #E5F0E4; --cream: #FBF3DC; --flag: #C1483D; --flag-tint: #F6E0DC;
+  --placeholder: #8A5A0C; --placeholder-tint: #FDF3DD; --focus: #284F3F;
+  --bar-pill: #1D3B2F; --bar-pill-ink: #FEFAF6; --bar-pill-edge: #1D3B2F;
+  --shadow: 0 1px 3px rgba(40,79,63,.14);
+  --r: 18px; --r-sm: 10px; --r-pill: 999px;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ink: #EEE7D8; --ink-soft: #93AC9D; --paper: #152621; --page: #152621; --surface: #1E352D; --surface-2: #254137;
+    --border: #33513F; --accent: #E9A843; --accent-strong: #F2BD66; --accent-tint: #33422A; --on-accent: #20361A;
+    --good: #7BC77E; --good-tint: #1F3A2A; --cream: #3A3626; --flag: #E07567; --flag-tint: #3F2624;
+    --placeholder: #E9A843; --placeholder-tint: #3D3320; --focus: #E9A843;
+    --bar-pill: #0F1E19; --bar-pill-edge: #33513F; --shadow: 0 1px 3px rgba(0,0,0,.4);
+  }
+}
+* { box-sizing: border-box; }
+html { color-scheme: light dark; }
+body { margin: 0; background: var(--page); color: var(--ink); font-family: "Poppins", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-size: .9rem; line-height: 1.45; }
+button, input, select, textarea, option { font: inherit; }
+h1, h2, h3 { margin: 0; font-weight: 600; letter-spacing: -.01em; color: var(--ink); text-wrap: balance; }
+::-webkit-scrollbar { width: 12px; height: 12px; }
+::-webkit-scrollbar-track, ::-webkit-scrollbar-corner { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--ink-soft); border: 3px solid transparent; background-clip: padding-box; border-radius: var(--r-pill); min-height: 36px; min-width: 36px; }
+::-webkit-scrollbar-thumb:hover { background: var(--gold); background-clip: padding-box; }
+
+/* Buttons: solid dark-green pill with gold text (primary), tan-outlined neutral (secondary). */
+button { cursor: pointer; border: 1px solid var(--border); border-radius: var(--r-sm); background: var(--surface); color: var(--ink); padding: 6px 12px; font-weight: 600; transition: background .15s, border-color .15s, color .15s; }
+button:hover { background: var(--surface-2); }
+button:active { transform: scale(.985); }
+button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+button.primary, button.p { background: var(--bar-pill); border-color: var(--bar-pill-edge); color: var(--gold); padding: 8px 16px; }
+button.primary:hover, button.p:hover { background: var(--bar-pill); border-color: var(--gold); color: #F0B95A; }
+button.s { background: var(--surface); }
+button.danger { color: var(--flag); border-color: var(--flag); background: var(--surface); }
+button.danger:hover { background: var(--flag-tint); }
+button:disabled { background: var(--surface-2); color: var(--ink-soft); border-color: var(--border); cursor: not-allowed; }
+input[type=text], select, textarea { background: var(--surface); color: var(--ink); border: 1px solid var(--border); border-radius: var(--r-sm); padding: 6px 10px; }
+input[type=text]::placeholder, textarea::placeholder { color: var(--ink-soft); }
+input[type=checkbox] { accent-color: var(--accent); }

@@ -1,7 +1,7 @@
 // Fails if any shipped file contains a way to reach the network, load remote code, or run dynamic code.
 const fs = require('fs'), path = require('path');
 const root = path.join(__dirname, '..');
-const files = ['background.js', 'lib.js', 'agent.js', 'sidepanel.js', 'sidepanel.html', 'sidepanel.css', 'options.js', 'options.html', 'options.css'];
+const files = ['background.js', 'lib.js', 'agent.js', 'sidepanel.js', 'sidepanel.html', 'sidepanel.css', 'theme.css', 'options.js', 'options.html', 'options.css'];
 const banned = [/\bfetch\s*\(/, /XMLHttpRequest/, /WebSocket/, /sendBeacon/, /EventSource/, /\beval\s*\(/, /new Function/, /importScripts/,
   /https?:\/\/(?!www\.w3\.org)/, /<script[^>]+src=["'](?!lib\.js|options\.js|sidepanel\.js)/, /<link[^>]+href=["']https?:/, /chrome\.runtime\.connect/, /chrome\.identity/, /chrome\.cookies/];
 let bad = 0;
