@@ -23,6 +23,8 @@ header button:hover { background: rgba(255,255,255,.12); color: var(--gold); }
 .chip { font-size: .7rem; font-weight: 600; padding: 2px 9px; border-radius: var(--r-pill); background: var(--surface-2); color: var(--ink-soft); border: 1px solid var(--border); white-space: nowrap; }
 .chip.saved, .chip.edited { background: var(--good-tint); color: var(--good); border-color: transparent; }
 .chip.default { background: var(--accent-tint); color: var(--accent-strong); border-color: transparent; }
+.chip.outside { background: var(--surface-2); color: var(--ink-soft); border-style: dashed; }
+.bar.fill-only { padding-top: 0; }
 .chip.guess { background: var(--placeholder-tint); color: var(--placeholder); border-color: var(--gold); }
 .ctl { display: flex; gap: 6px; margin-top: 6px; }
 .ctl input, .ctl select { flex: 1; min-width: 0; padding: 4px 8px; font-size: .8rem; }

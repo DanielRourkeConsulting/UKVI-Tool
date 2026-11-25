@@ -71,6 +71,17 @@ const src = path.join(__dirname, '..');
   rows = await rowsOf();
   assert.deepStrictEqual([get(rows, 'Reason').chip, get(rows, 'Reason').val, get(rows, 'Reason').on], ['default', 'Fee waiver – destitution', true]);
   assert.strictEqual(get(rows, 'First name').chip, 'saved');
+  // Fill follows a chosen template; the choice is kept across pages until changed.
+  await panel.selectOption('#fill-tpl', 'fee_waiver'); await panel.waitForTimeout(300);
+  assert.strictEqual((await st()).prefs.fillTemplate, 'fee_waiver');
+  await sw.evaluate(async () => { const { db } = await chrome.storage.local.get('db'); delete db.caseTemplates.common.items.passport_number; delete db.caseTemplates.fee_waiver.items.passport_number; await chrome.storage.local.set({ db }); });
+  await form.reload(); await panel.waitForTimeout(1200);
+  assert.strictEqual(await panel.locator('#fill-tpl').inputValue(), 'fee_waiver', 'template choice remembered');
+  rows = await rowsOf();
+  assert.deepStrictEqual([get(rows, 'Passport number').chip, get(rows, 'Passport number').on], ['not in template', false], 'items outside the template are not ticked');
+  assert.strictEqual(get(rows, 'First name').on, true);
+  await panel.selectOption('#fill-tpl', ''); await panel.waitForTimeout(300);
+  assert.strictEqual(get(await rowsOf(), 'Passport number').on, true, '"any" ticks it again');
   assert.deepStrictEqual(errors, [], errors.join('; '));
   console.log('side panel test passed'); await ctx.close(); server.close();
 })().catch((e) => { console.error(e); process.exit(1); });
