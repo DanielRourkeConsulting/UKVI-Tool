@@ -9,23 +9,21 @@
 </head>
 <body>
 <header>
-  <button id="btn-rescan" class="act2 page-only" title="Read the page again"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M13.5 8a5.5 5.5 0 1 1-1.6-3.9"/><path d="M12.4 1.6v2.9H9.5"/></svg>Rescan</button>
-  <button id="btn-fill" class="act fill-only page-only" title="Put the ticked fields into the page"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M10.6 2.2l3.2 3.2-7.6 7.6-3.9.7.7-3.9z"/><path d="M9 3.8l3.2 3.2"/></svg>Fill</button>
-  <button id="btn-remember" class="act capture-only page-only" title="Save this page: its layout, your field choices and the default text for each field"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M1.5 5V2.5a1 1 0 0 1 1-1H5M11 1.5h2.5a1 1 0 0 1 1 1V5M14.5 11v2.5a1 1 0 0 1-1 1H11M5 14.5H2.5a1 1 0 0 1-1-1V11"/><path d="M5 6h6M5 8.2h6M5 10.4h3.5"/></svg>Capture</button>
-  <div class="modes" role="radiogroup" aria-label="Mode">
-    <button id="mode-fill" role="radio" data-mode="fill" title="Fill: put saved answers into this form"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M10.6 2.2l3.2 3.2-7.6 7.6-3.9.7.7-3.9z"/><path d="M9 3.8l3.2 3.2"/></svg>Fill</button>
-    <button id="mode-capture" role="radio" data-mode="capture" title="Capture: save this form's layout and the default text to use next time"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M1.5 5V2.5a1 1 0 0 1 1-1H5M11 1.5h2.5a1 1 0 0 1 1 1V5M14.5 11v2.5a1 1 0 0 1-1 1H11M5 14.5H2.5a1 1 0 0 1-1-1V11"/><path d="M5 6h6M5 8.2h6M5 10.4h3.5"/></svg>Capture</button>
-  </div>
+  <button id="btn-fill" class="act fill-only" title="Put the ticked fields into the page"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M10.6 2.2l3.2 3.2-7.6 7.6-3.9.7.7-3.9z"/><path d="M9 3.8l3.2 3.2"/></svg>Fill</button>
+  <button id="btn-remember" class="act capture-only" title="Save this page: its layout, your field choices and the default text for each field"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 8.5l3.6 3.6 7.4-8.2"/></svg>Save</button>
+  <button id="btn-rescan" class="act2 mid" title="Read the page again"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M13.5 8a5.5 5.5 0 1 1-1.6-3.9"/><path d="M12.4 1.6v2.9H9.5"/></svg>Rescan</button>
+  <button id="btn-capture" class="act2 end fill-only" title="Change how this page is filled: its sources and default text"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M1.5 5V2.5a1 1 0 0 1 1-1H5M11 1.5h2.5a1 1 0 0 1 1 1V5M14.5 11v2.5a1 1 0 0 1-1 1H11M5 14.5H2.5a1 1 0 0 1-1-1V11"/><path d="M5 6h6M5 8.2h6M5 10.4h3.5"/></svg>Capture</button>
+  <button id="btn-cancel" class="act2 end capture-only" title="Back to Fill without saving"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 3.5l9 9M12.5 3.5l-9 9"/></svg>Cancel</button>
+  <button id="btn-done" class="act editor-only" title="Back to the form"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 8.5l3.6 3.6 7.4-8.2"/></svg>Done</button>
 </header>
-<div class="bar tpls capture-only page-only"><span>Save to:</span><div id="tpl-chips"></div><div class="tpl-new"><input type="text" id="tpl-new-name" placeholder="New template" aria-label="New template name"><button id="btn-tpl-new" class="s">Add</button></div></div>
-<div class="bar fill-only"><span>Case:</span><select id="case-sel"></select></div>
-<div class="bar tpl-bar"><span>Template:</span><select id="fill-tpl"></select></div>
-<div class="sum"><div class="views" role="radiogroup" aria-label="View"><button role="radio" data-view="page" id="view-page">This page</button><button role="radio" data-view="saved" id="view-saved">Saved pages</button></div><span id="summary"></span><select id="filter" class="page-only"><option value="all">Show all</option><option value="ready">Ready to fill</option><option value="attention">Needs attention</option></select></div>
+<div class="bar tpls capture-only"><span>Save to:</span><div id="tpl-chips"></div><div class="tpl-new"><input type="text" id="tpl-new-name" placeholder="New template" aria-label="New template name"><button id="btn-tpl-new" class="s">Add</button></div></div>
+<div class="bar picks fill-only"><select id="case-sel" aria-label="Case"></select><select id="fill-tpl" aria-label="Template"></select></div>
 <div id="list" class="list"></div>
 <footer>
   <img class="logo logo-light" src="icons/logo.png" alt="Daniel Rourke Consulting"><img class="logo logo-dark" src="icons/logo-dark.png" alt="Daniel Rourke Consulting">
   <div id="status" class="status"></div>
-  <button id="btn-opts" title="Data settings">⚙</button>
+  <button id="btn-edit" class="ficon" title="Template editor" aria-pressed="false"><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="2" width="12" height="12" rx="2"/><path d="M5 5.5h6M5 8h6M5 10.5h3.5"/></svg></button>
+  <button id="btn-opts" class="ficon" title="Data settings">⚙</button>
 </footer>
 <script src="lib.js"></script>
 <script src="sidepanel.js"></script>

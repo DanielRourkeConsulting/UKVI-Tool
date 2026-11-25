@@ -18,6 +18,7 @@
   <button data-tab="adviser">Adviser (every form)</button>
   <button data-tab="learned">Learned forms &amp; defaults</button>
   <button data-tab="backup">Backup &amp; Copilot help</button>
+  <button data-tab="panel">Side panel</button>
 </nav>
 <main>
   <section id="tab-cases">
@@ -62,6 +63,11 @@
     <h2>Field links</h2><p>Which saved item feeds which form field. Remove one to let the tool guess again.</p><div id="map-list"></div>
     <h2>Default values</h2><p>Remembered answers for fields that don't come from case data (most used first).</p><div id="def-list"></div>
     <h2>Import column names</h2><div id="imp-list"></div>
+  </section>
+
+  <section id="tab-panel" hidden>
+    <h2>Side panel</h2>
+    <div class="row"><label for="pref-filter">Fields shown on the open page</label><select id="pref-filter"><option value="all">Show all</option><option value="ready">Ready to fill</option><option value="attention">Needs attention</option></select></div>
   </section>
 
   <section id="tab-backup" hidden>

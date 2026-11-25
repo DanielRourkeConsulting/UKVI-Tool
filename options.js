@@ -17,6 +17,9 @@
   };
   const say = (sel, text, cls) => { const m = $(sel); m.textContent = text; m.className = 'msg ' + (cls || ''); };
   const persist = async () => { await U.save(db); };
+  // Side panel: which fields the open page shows (Show all unless changed).
+  $('#pref-filter').value = db.prefs.filter || 'all';
+  $('#pref-filter').addEventListener('change', async (e) => { db = await U.load(); db.prefs.filter = e.target.value; await persist(); });
   const download = (name, text, type) => {
     const a = el('a', { href: URL.createObjectURL(new Blob([text], { type: type || 'application/json' })), download: name });
     document.body.append(a); a.click(); a.remove();

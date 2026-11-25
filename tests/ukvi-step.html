@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Start - Register an email</title>
+<style>.visuallyhidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+#progress-indicator-steps li { display: inline-block; margin-right: 12px; }
+#progress-indicator-steps a::before { content: attr(data-nav-position); }</style></head>
+<body>
+<!-- The shape of the UKVI step bar: the number is in data-nav-position (drawn by CSS), the current step has class "current"
+     and a visually hidden " - current step". -->
+<header id="progressIndicatorBar"><nav class="progress-indicator"><ol id="progress-indicator-steps">
+  <li class="current"><a data-nav-position="1 of 7: ">Start <span class="visuallyhidden"> - current step</span></a></li>
+  <li class="inactive"><a data-nav-position="2 of 7: ">Application</a></li>
+  <li class="inactive"><a data-nav-position="3 of 7: ">Finance</a></li>
+  <li class="inactive"><a data-nav-position="4 of 7: ">Documents</a></li>
+  <li class="show-all"><a href="#progress-indicator-steps">Show all steps</a></li>
+</ol></nav></header>
+<main><h1>Register an email</h1>
+<form><label for="email">Email address</label><input type="email" id="email" name="email">
+<input type="submit" value="Save and continue"></form></main>
+</body></html>

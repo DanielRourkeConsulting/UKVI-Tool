@@ -4,15 +4,20 @@
   'use strict';
   const U = window.UKVI;
   const $ = (s) => document.querySelector(s);
-  let selTpl = new Set(['common']), db, tab = null, rows = [], overrides = new Map(), filter = 'all', tid = '', heading = '', msg = '', originPattern = '', timer = null;
-  // Two modes: 'capture' (learn this form's layout and the default text for each field) and 'fill' (put answers in).
-  let mode = '', caption = '', section = null;
+  let selTpl = new Set(['common']), db, tab = null, rows = [], overrides = new Map(), tid = '', heading = '', msg = '', originPattern = '', timer = null;
+  // Fill is the normal state. Capture (learn this form's layout and the default text for each field) is opened per page with
+  // the Capture button and closed by Save or Cancel; a page that has never been saved opens in Capture by itself.
+  let mode = 'fill', modeTid = null, caption = '', section = null;
   const sectionText = (s) => (s ? s.num + '. ' + s.name : '');
-  // Two views: 'page' (the fields on the open page) and 'saved' (every saved page of the template, in capture order).
-  let view = 'page', armed = '', openPages = new Set();
-  function showView() {
-    document.body.dataset.view = view;
-    document.querySelectorAll('.views button').forEach((b) => b.setAttribute('aria-checked', String(b.dataset.view === view)));
+  // The list shows every saved page of the template by form section; the open page is highlighted and holds its fields.
+  let armed = '', openPages = new Set(), openedFor = null;
+  // The template editor (icon next to settings) lists the saved pages with bins to delete them; the normal list has none.
+  let editing = false;
+  function setEditing(on) {
+    editing = on; armed = ''; msg = '';
+    document.body.dataset.view = on ? 'editor' : '';
+    $('#btn-edit').setAttribute('aria-pressed', String(on));
+    if (db) render();
   }
 
   // ---------- Mode ----------
@@ -23,20 +28,14 @@
   async function setMode(m) {
     if (m === mode) return;
     mode = m; msg = ''; showMode();
-    const d = await U.load(); d.prefs.mode = m; await U.save(d);
-    if (db) db.prefs.mode = m;
-    if (rows.length || view === 'saved') render();
+    if (rows.length) render();
   }
-  function setView(v) {
-    if (v === view) return;
-    view = v; armed = ''; msg = '';
-    if (v === 'saved') {
-      const here = (db && db.templates[tid]) || {};
-      openPages = new Set(tid ? [tid, 'sec:' + secKey(here.section || section)] : []);
-    }
-    showView(); if (db) render();
+  // Cancel: drop what was changed in Capture and go back to Fill.
+  function cancelCapture() {
+    overrides.clear(); mode = 'fill'; msg = ''; showMode();
+    if (lastScan) buildRows(lastScan);
+    if (rows.length) render();
   }
-
   const el = (tag, props, ...kids) => {
     const e = document.createElement(tag);
     for (const [k, v] of Object.entries(props || {})) {
@@ -62,7 +61,7 @@
   }
 
   function showState(html, button) {
-    rows = []; $('#list').textContent = ''; $('#summary').textContent = '';
+    rows = []; $('#list').textContent = '';
     const box = el('div', { class: 'empty' }, ...html);
     if (button) box.append(el('br'), button);
     $('#list').append(box);
@@ -112,14 +111,14 @@
   // ---------- Drawing ----------
   function fillCaseSelect() {
     const sel = $('#case-sel'); sel.textContent = '';
-    sel.append(el('option', { value: '', text: Object.keys(db.cases).length ? '— none selected —' : '— no cases imported —' }));
+    sel.append(el('option', { value: '', text: Object.keys(db.cases).length ? 'Select a case' : 'No cases imported' }));
     Object.entries(db.cases).forEach(([id, c]) => sel.append(el('option', { value: id, text: U.caseLabel(c, id), selected: id === db.currentCase })));
   }
   let lastTid = '', lastScan = null;
   function fillTplSelect() {
     const sel = $('#fill-tpl'); sel.textContent = '';
     if (db.prefs.fillTemplate && !db.caseTemplates[db.prefs.fillTemplate]) db.prefs.fillTemplate = '';
-    sel.append(el('option', { value: '', text: '— any —' }));
+    sel.append(el('option', { value: '', text: 'Select a template' }));
     Object.entries(db.caseTemplates).forEach(([id, t]) => sel.append(el('option', { value: id, text: t.name, selected: id === db.prefs.fillTemplate })));
   }
   function renderTpls() {
@@ -157,13 +156,18 @@
       .filter(([pid]) => !ft || (db.pageTemplates[pid] || []).includes(ft))
       .sort((a, b) => (a[1].created || a[1].updated || 0) - (b[1].created || b[1].updated || 0));
   }
-  function renderSaved() {
+  function render() {
     const list = $('#list'); list.textContent = '';
     renderTpls();
-    const pages = savedPages();
-    $('#summary').textContent = pages.length + ' page' + (pages.length === 1 ? '' : 's');
     $('#status').textContent = msg;
-    if (!pages.length) { list.append(el('div', { class: 'empty', text: 'No pages saved yet.' })); return; }
+    // Moving to a new page opens it and its section, and closes everything else.
+    if (tid !== openedFor) {
+      openedFor = tid; armed = ''; openPages = new Set([tid, 'sec:' + secKey(section)]); // earlier pages and sections fold away
+      requestAnimationFrame(() => { const h = document.querySelector('details.page.here'); if (h) h.scrollIntoView({ block: 'start' }); });
+    }
+    const pages = savedPages();
+    // The open page, if it isn't saved (in this template), is a dashed box in its section (titled "This page" if it has no heading).
+    if (!editing && tid && !pages.some(([pid]) => pid === tid)) pages.push([tid, { title: heading || 'This page', caption, section, live: true }]);
     // Group the pages by form section (from the step bar), sections in step order, pages in capture order.
     const groups = new Map();
     pages.forEach(([pid, p]) => {
@@ -179,25 +183,29 @@
       const d = el('details', { class: 'section' + (here ? ' here' : ''), open: openPages.has(ok) },
         el('summary', {}, el('span', { class: 'pnum', text: g.sec ? String(g.sec.num) : '·' }),
           el('span', { class: 'ptitle', text: g.sec ? g.sec.name : 'Other pages' }),
-          el('span', { class: 'pcount', text: g.pages.length + ' page' + (g.pages.length === 1 ? '' : 's') })),
-        el('div', { class: 'spages' }, g.pages.map(([pid, p], i) => pageBox(pid, p, i))),
-        el('div', { class: 'pdel' }, del));
+          el('span', { class: 'pcount', text: g.pages.length + ' page' + (g.pages.length === 1 ? '' : 's') }),
+          editing ? del : null),
+        el('div', { class: 'spages' }, g.pages.map(([pid, p], i) => pageBox(pid, p, i))));
       d.addEventListener('toggle', () => { d.open ? openPages.add(ok) : openPages.delete(ok); });
       list.append(d);
     });
   }
   // Sections are matched by step number (the step's wording can change, e.g. a "Completed" tag).
   const secKey = (s) => (s ? 'n' + s.num : 'none');
-  // A Delete button that needs a second click ("Confirm delete") to act.
+  // A small bin that needs a second click to act: the first turns it red.
+  const BIN = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 4h11M6 4V2.5h4V4M3.8 4l.7 9.5h7l.7-9.5M6.5 6.5v4.8M9.5 6.5v4.8"/></svg>';
   function armButton(key, label, act) {
-    const b = el('button', { class: 'danger' + (armed === key ? ' armed' : ''), text: armed === key ? 'Confirm delete' : label });
-    b.addEventListener('click', async (e) => { e.preventDefault(); e.stopPropagation(); if (armed !== key) { armed = key; renderSaved(); return; } armed = ''; await act(); });
+    const on = armed === key, b = el('button', { class: 'bin' + (on ? ' armed' : ''), title: on ? label + ': click again to confirm' : label, 'aria-label': on ? 'Confirm: ' + label : label });
+    b.innerHTML = BIN;
+    b.addEventListener('click', async (e) => { e.preventDefault(); e.stopPropagation(); if (armed !== key) { armed = key; render(); return; } armed = ''; await act(); });
     return b;
   }
   function pageBox(pid, p, i) {
       const tm = db.tmplMappings[pid] || {};
-      const fields = el('div', { class: 'pfields' });
-      (p.fields || []).forEach((f) => {
+      const here = pid === tid;
+      const fields = el('div', { class: here ? 'pfields live' : 'pfields' });
+      if (here && !editing) liveRows(fields);
+      else (p.fields || []).forEach((f) => {
         const ref = tm[f.fp] !== undefined ? tm[f.fp] : (db.mappings[f.fp] || 'none');
         const val = U.refValue(ref, db, f.fp);
         fields.append(el('div', { class: 'pf' + (ref === 'none' ? ' skip' : '') },
@@ -206,12 +214,13 @@
           el('span', { class: 'pf-val', text: val || '—' })));
       });
       const del = armButton(pid, 'Delete page', async () => { db = await U.load(); const t = (db.templates[pid] || {}).title || pid; removePage(pid); await afterDelete([pid], t); });
-      const d = el('details', { class: 'page' + (pid === tid ? ' here' : ''), open: openPages.has(pid) },
+      const d = el('details', { class: 'page' + (here ? ' here' : '') + (p.live ? ' placeholder' : ''), open: openPages.has(pid) },
         el('summary', {}, el('span', { class: 'pnum', text: String(i + 1) }),
           el('span', { class: 'ptitle' }, p.title || pid, p.caption ? el('small', { text: p.caption }) : null),
-          el('span', { class: 'pcount', text: String((p.fields || []).length) })),
-        fields, el('div', { class: 'pdel' }, del));
-      d.addEventListener('toggle', () => { d.open ? openPages.add(pid) : openPages.delete(pid); if (!d.open && armed === pid) { armed = ''; renderSaved(); } });
+          el('span', { class: 'pcount', text: String(here && !editing ? rows.length : (p.fields || []).length) }),
+          editing ? del : null),
+        fields);
+      d.addEventListener('toggle', () => { d.open ? openPages.add(pid) : openPages.delete(pid); if (!d.open && armed === pid) { armed = ''; render(); } });
       return d;
   }
   // With a template chosen, Delete takes the page out of that template (it is forgotten once no template uses it);
@@ -224,18 +233,13 @@
   async function afterDelete(pids, title) {
     await U.save(db);
     if (pids.includes(tid)) { lastTid = ''; overrides.clear(); if (lastScan) buildRows(lastScan); }
-    msg = 'Deleted “' + title + '”.'; renderSaved();
+    msg = 'Deleted “' + title + '”.'; render();
   }
 
-  function render() {
-    if (view === 'saved') return renderSaved();
-    const list = $('#list'); list.textContent = '';
-    const ready = rows.filter((r) => r.include).length;
-    renderTpls();
-    $('#summary').textContent = mode === 'fill' ? ready + '/' + rows.length + ' ready' : rows.length + ' fields';
-    const over = [sectionText(section), caption].filter(Boolean).join(' · ');
-    if (heading) list.append(el('div', { class: 'pagehead' }, over ? el('small', { text: over }) : null, heading));
-    if (!rows.length) { list.append(el('div', { class: 'empty', text: 'No fillable fields found on this page.' })); $('#status').textContent = msg; return; }
+  // The open page's fields: Fill rows (tick + value) or Capture rows (default text + source).
+  function liveRows(list) {
+    if (!rows.length) { list.append(el('div', { class: 'none', text: 'No fillable fields found on this page.' })); return; }
+    const filter = db.prefs.filter || 'all'; // set on the options page
     const vis = rows.filter((r) => filter === 'all' || (filter === 'ready' ? r.include : (r.origin === 'guess' || r.origin === 'none' || (r.value === '' && r.ref !== 'none'))));
     const capture = mode === 'capture';
     vis.forEach((r) => {
@@ -265,13 +269,11 @@
       row.addEventListener('mouseleave', () => ask({ type: 'flash', id: r.f.id, on: false }).catch(() => {}));
       list.append(row);
     });
-    $('#status').textContent = msg;
   }
 
   // ---------- Refresh (tab changed, page loaded, Rescan) ----------
   async function refresh() {
     db = await U.load(); fillCaseSelect(); fillTplSelect();
-    if (!mode) { mode = db.prefs.mode || (Object.keys(db.templates).length ? 'fill' : 'capture'); showMode(); }
     tab = await activeTab();
     originPattern = tab && tab.url ? originOf(tab.url) : '';
     if (!originPattern) { showState([el('p', { text: 'Open a UKVI form page in this window.' })]); return; }
@@ -283,7 +285,12 @@
         el('button', { class: 'p', text: 'Allow on ' + host, onclick: async () => { try { if (await chrome.permissions.request({ origins: [originPattern] })) refresh(); } catch (e) { msg = e.message; } } }));
       return;
     }
-    try { lastScan = await scanPage(); buildRows(lastScan); msg = ''; render(); }
+    try {
+      lastScan = await scanPage(); buildRows(lastScan); msg = '';
+      // A different page: Fill if it has been saved, Capture if not. The same page (Rescan, reload) keeps its state.
+      if (tid !== modeTid) { modeTid = tid; mode = db.templates[tid] ? 'fill' : 'capture'; showMode(); }
+      render();
+    }
     catch (e) { showState([el('p', { text: 'Couldn\'t read this page.' }), el('p', { text: String(e.message || e) })]); }
   }
   const schedule = () => { clearTimeout(timer); timer = setTimeout(refresh, 300); };
@@ -319,15 +326,17 @@
     db.templates[tid] = { title: fresh.heading || heading, caption: fresh.caption || '', section: fresh.section || null, url: fresh.url, created: before.created || before.updated || Date.now(), updated: Date.now(),
       fields: rows.map((r) => ({ fp: r.fp, label: r.f.display, kind: r.f.kind, part: r.f.part || '', options: r.f.options.slice(0, 40).map((o) => o.text) })) };
     // Case-data items this page needs go into the common case template (adviser data and defaults are ours, not the client's).
-    let tplMsg = '';
     const chosen = [...selTpl].filter((id) => db.caseTemplates[id]);
     db.pageTemplates[tid] = chosen; db.prefs.lastTemplates = chosen;
     const uses = rows.filter((r) => !skipPersist(r) && r.ref.startsWith('case:')).map((r) => ({ key: r.ref.slice(5), fieldLabel: r.f.display }));
     chosen.forEach((id) => U.addToTemplate(db, id, tid, heading || tid, uses));
-    tplMsg = chosen.length ? ' ' + uses.length + ' case item' + (uses.length === 1 ? '' : 's') + ' saved to: ' + chosen.map((id) => db.caseTemplates[id].name).join(', ') + '.' : ' No template ticked, so no case items were added to a template.';
     await U.save(db); overrides.clear();
-    lastScan = fresh; fillTplSelect(); buildRows(fresh);
-    msg = 'Saved this page layout (' + rows.length + ' fields) and ' + learned + ' default value' + (learned === 1 ? '' : 's') + '.' + tplMsg; render();
+    lastScan = fresh; fillTplSelect(); mode = 'fill'; showMode(); buildRows(fresh);
+    // "Saved: 14 fields, 1 default, 3 case items to Fee waiver." Parts that would be 0 are left out.
+    const n = (k, w) => k + ' ' + w + (k === 1 ? '' : 's');
+    const parts = [rows.length && n(rows.length, 'field'), learned && n(learned, 'default'),
+      uses.length && n(uses.length, 'case item') + (chosen.length ? ' to ' + chosen.map((id) => db.caseTemplates[id].name).join(', ') : ' (no template ticked)')].filter(Boolean);
+    msg = 'Saved' + (parts.length ? ': ' + parts.join(', ') : '') + '.'; render();
   }
 
   $('#btn-fill').addEventListener('click', doFill);
@@ -357,16 +366,19 @@
     msg = n ? n + ' default' + (n === 1 ? '' : 's') + ' taken from the page.' : '';
     render();
   });
-  document.querySelectorAll('.modes button').forEach((b) => b.addEventListener('click', () => setMode(b.dataset.mode)));
-  document.querySelectorAll('.views button').forEach((b) => b.addEventListener('click', () => setView(b.dataset.view)));
-  showView();
+  // A click anywhere else puts an armed bin back.
+  document.addEventListener('click', (e) => { if (armed && !e.target.closest('.bin')) { armed = ''; render(); } });
+  $('#btn-edit').addEventListener('click', () => setEditing(!editing));
+  $('#btn-done').addEventListener('click', () => setEditing(false));
+  $('#btn-capture').addEventListener('click', () => setMode('capture'));
+  $('#btn-cancel').addEventListener('click', cancelCapture);
+  showMode();
   $('#btn-opts').addEventListener('click', () => chrome.runtime.openOptionsPage());
-  $('#filter').addEventListener('change', (e) => { filter = e.target.value; render(); });
   // The template being followed is kept until the adviser picks another.
   $('#fill-tpl').addEventListener('change', async (e) => {
     const d = await U.load(); d.prefs.fillTemplate = e.target.value; await U.save(d);
     db.prefs.fillTemplate = e.target.value;
-    armed = ''; if (lastScan) buildRows(lastScan); if (lastScan || view === 'saved') render();
+    armed = ''; if (lastScan) buildRows(lastScan); if (lastScan) render();
   });
   $('#case-sel').addEventListener('change', async (e) => { db.currentCase = e.target.value || null; await U.save(db); refresh(); });
 

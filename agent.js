@@ -200,7 +200,16 @@
   const curClass = /(^|[\s_-])(active|current|selected)($|[\s_-])/i; // not "inactive"
   const marked = (e) => (e.hasAttribute('aria-current') && e.getAttribute('aria-current') !== 'false') || e.getAttribute('aria-selected') === 'true' || curClass.test(e.className && e.className.baseVal !== undefined ? e.className.baseVal : e.className || '');
   const isCurrent = (li) => marked(li) || [...li.querySelectorAll('*')].some(marked);
+  // Text a sighted user sees (drops "visually hidden" screen-reader extras such as " - current step").
+  const seen = (node) => { const c = node.cloneNode(true); c.querySelectorAll('.visuallyhidden, .govuk-visually-hidden, .sr-only').forEach((n) => n.remove()); return txt(c); };
   function pageSection() {
+    // UKVI's own step bar: <li class="current"><a data-nav-position="1 of 7: ">Start</a></li>. The number is in the
+    // attribute (drawn by CSS), not the text, and on narrow windows only the current step is shown.
+    const navs = [...document.querySelectorAll('[data-nav-position]')].filter((a) => /^\s*\d{1,2}\s+of\s+\d/.test(a.getAttribute('data-nav-position')));
+    if (navs.length >= 2) {
+      const cur = navs.find((a) => isCurrent(a.closest('li') || a) || /current step/i.test(a.textContent));
+      if (cur) return { num: parseInt(cur.getAttribute('data-nav-position'), 10), name: seen(cur).slice(0, 80) };
+    }
     const lists = [...document.querySelectorAll('ol, ul, [role=tablist]')].filter((l) => l.getClientRects().length);
     for (const l of lists) {
       const items = [...l.children].filter((c) => c.getClientRects().length);
@@ -211,7 +220,7 @@
         const max = Math.max(...w);
         if (w.filter((x) => x === max).length === 1 && max > Math.min(...w)) cur = items[w.indexOf(max)];
       }
-      if (cur) { const t = txt(cur), m = t.match(/^\s*(\d{1,2})\s*[.):]?\s+(.*)$/); return m ? { num: +m[1], name: m[2].slice(0, 80) } : null; }
+      if (cur) { const t = seen(cur), m = t.match(/^\s*(\d{1,2})\s*[.):]?\s+(.*)$/); return m ? { num: +m[1], name: m[2].slice(0, 80) } : null; }
     }
     return null;
   }
